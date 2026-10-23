@@ -106,6 +106,15 @@ def texty():
             ],
         },
         {
+            "nazev": "Aktualizace PISM",
+            "odstavce": [
+                "PISM se samo podívá, jestli je novější verze. Podívá se, když správce otevře plochu, a znovu nejdřív za den.",
+                "Když novější verze je, na ploše přibude ikona Aktualizace PISM. Když není, ikona tam není.",
+                "Kliknutí otevře okno. Aktualizovat program nahradí. Účty, složky, disky, zrcadlo i síť zůstanou. Zavřít jen zavře.",
+                "Když se nová verze nespustí, zůstane běžet ta současná. Běžný účet ikonu nevidí.",
+            ],
+        },
+        {
             "nazev": "Darovat",
             "odstavce": [
                 "PISM jede naplno. Víc disků i zrcadlo jdou používat včetně zápisu. Nic se za dar nezamyká a nic se neodemkne.",

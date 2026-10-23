@@ -28,7 +28,7 @@ fi
 install -d -m 755 /home/pi "$CIL" "$CIL/web" "$CIL/data"
 
 for soubor in \
-  server.py stroj.py raid.py licence.py dar.py napoveda.py cas.py sdileni.py sit.py vetrak.py \
+  server.py stroj.py raid.py licence.py dar.py napoveda.py cas.py sdileni.py sit.py vetrak.py aktualizace.py \
   pism-sit pism.service pism-vetrak.service pism-sit.service grosistudio-logo.png
 do
   if [ -f "$ZDROJ/$soubor" ]; then

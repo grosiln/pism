@@ -15,6 +15,7 @@ import raid
 import cas
 import licence
 import dar
+import aktualizace
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -182,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._chtej_spravu():
             return
         if path == "/api/plocha":
-            self._json(200, {"ok": True, "polozky": PLOCHA})
+            self._json(200, {"ok": True, "polozky": aktualizace.polozky(PLOCHA)})
             return
         cteni = {
             "/api/sit": stroj.sit,
@@ -195,6 +196,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/sluzby": stroj.sluzby,
             "/api/cas": cas.stav,
             "/api/dar": dar.texty,
+            "/api/aktualizace": aktualizace.texty,
             "/api/uzivatele": self._seznam_uctu,
             "/api/wifi": stroj.wifi_site,
         }
@@ -257,6 +259,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/cas/pasmo": lambda: cas.nastav_pasmo(data.get("pasmo")),
             "/api/system/restart": stroj.restartovat,
             "/api/system/vypnout": stroj.vypnout,
+            "/api/aktualizace": aktualizace.proved,
         }
         if path in akce:
             self._proved(akce[path])

@@ -16,6 +16,8 @@ curl -fsSL https://raw.githubusercontent.com/grosiln/pism/main/instaluj.sh | sud
 
 Soubor [instaluj.sh](instaluj.sh) je tu k nahlédnutí.
 
+Když později vyjde novější verze, na ploše správce přibude ikona Aktualizace PISM. Účty, složky, disky, zrcadlo i síť zůstanou.
+
 ## První spuštění
 
 Zvolí se heslo správce. Nic jiného v PISM ještě není.

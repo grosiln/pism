@@ -47,7 +47,8 @@ const tvary = {
   cas: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M24 14 v11 l7 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   system: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M24 20 v12" stroke="currentColor" stroke-width="2"/><circle cx="24" cy="15" r="1.6" fill="currentColor"/></svg>',
   napoveda: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M18 19 a6 6 0 1 1 8 5 c-2 1.4-2 2-2 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="24" cy="33" r="1.6" fill="currentColor"/></svg>',
-  dar: '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path d="M24 40 s-12-7.4-16.5-14.2C4.2 21.2 6.2 15 11.6 13.6 15.4 12.6 18.6 14.2 24 19.2c5.4-5 8.6-6.6 12.4-5.6 5.4 1.4 7.4 7.6 4.1 12.2C36 32.6 24 40 24 40z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>'
+  dar: '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path d="M24 40 s-12-7.4-16.5-14.2C4.2 21.2 6.2 15 11.6 13.6 15.4 12.6 18.6 14.2 24 19.2c5.4-5 8.6-6.6 12.4-5.6 5.4 1.4 7.4 7.6 4.1 12.2C36 32.6 24 40 24 40z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>',
+  aktualizace: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><path d="M16 18 a12 12 0 1 1-2 10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 12 v8 h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
 };
 
 const panely = {
@@ -59,7 +60,8 @@ const panely = {
   cas: nactiCas,
   system: nactiSystem,
   napoveda: nactiNapovedu,
-  dar: nactiDar
+  dar: nactiDar,
+  aktualizace: nactiAktualizace
 };
 
 function el(tag, attrs, deti) {
@@ -1124,6 +1126,43 @@ async function nactiDar() {
   oknoTelo.replaceChildren(el("div", { class: "na-sirku" },
     (data.vety || []).map((veta) => el("p", { class: "poznamka", text: veta }))
   ));
+  pripravUlozeni(null);
+}
+
+async function pockejNaNavrat() {
+  await new Promise((konec) => setTimeout(konec, 4000));
+  for (let krok = 0; krok < 20; krok += 1) {
+    try {
+      const stav = await fetch("/api/stav", { cache: "no-store" }).then((odpoved) => odpoved.json());
+      if (stav && stav.ok) return;
+    } catch (chyba) {
+      /* PISM se zrovna obnovuje. */
+    }
+    await new Promise((konec) => setTimeout(konec, 1000));
+  }
+}
+
+async function nactiAktualizace() {
+  const data = await api("/api/aktualizace");
+  const deti = (data.vety || []).map((veta) => el("p", { class: "poznamka", text: veta }));
+  if (data.lze) {
+    const tlacitko = el("button", { type: "button", className: "male", textContent: "Aktualizovat" });
+    tlacitko.addEventListener("click", async () => {
+      tlacitko.disabled = true;
+      ukazOknoHlaseni("Aktualizuji…");
+      try {
+        await api("/api/aktualizace", {});
+        ukazOknoHlaseni("PISM se obnovuje. Stránka se za chvíli načte znovu.");
+        await pockejNaNavrat();
+        location.reload();
+      } catch (chyba) {
+        tlacitko.disabled = false;
+        ukazOknoHlaseni(chyba.message);
+      }
+    });
+    deti.push(tlacitko);
+  }
+  oknoTelo.replaceChildren(el("div", { class: "na-sirku" }, deti));
   pripravUlozeni(null);
 }
 
