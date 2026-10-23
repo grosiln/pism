@@ -129,6 +129,13 @@ button[type="submit"]:hover, #zavrit:hover { background: var(--akcent-svetly); }
   font-weight: 600;
 }
 
+.znacka-lista .vystaveno {
+  color: #fff;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .lista-stred {
   position: absolute;
   left: 50%;

@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 VERZE = "1.1"
+VYSTAVENO = "23. 10. 2026"
 MISTO = Path("/srv/pism")
 SLOZKY_DIR = MISTO / "slozky"
 DALSI_KOREN = Path("/srv/pism-dalsi")

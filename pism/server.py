@@ -168,6 +168,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {
                 "ok": True, "prvni": prvni, "prihlasen": bool(ucet),
                 "ucet": ucet or "", "spravce": spravce, "verze": stroj.VERZE,
+                "vystaveno": stroj.VYSTAVENO,
             })
             return
         if path == "/api/prehled":

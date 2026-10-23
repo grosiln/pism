@@ -1,6 +1,6 @@
 # PISM
 
-Aktuální verze 1.1, vystavená 23. 10. 2026.
+**Aktuální verze 1.1, vystavená 23. 10. 2026.**
 
 PISM je úložiště na Raspberry Pi 4. Sdílené složky, účty, disky a zrcadlo se ovládají v prohlížeči.
 
