@@ -80,7 +80,7 @@ def texty():
         {
             "nazev": "Informace o systému",
             "odstavce": [
-                "Jen stav PI4. Jméno, verze PISM, zařízení, systém, jádro, Python, čas, jak dlouho běží, teplota a paměť. Systém, jádro a Python se přečtou z PI4 při otevření okna. Volné místo na discích je v Diskách a v rychlém pohledu.",
+                "Jen stav PI4. Jméno, verze PISM, zařízení, systém, jádro, Python, čas, jak dlouho běží, teplota a paměť. Stejné číslo verze je v liště za PI4. Systém, jádro a Python se přečtou z PI4 při otevření okna. Volné místo na discích je v Diskách a v rychlém pohledu.",
                 "Na ploše vpravo pod žlutou čárou je rychlý pohled. Je tam název v síti, adresa, jestli jde ven kabel nebo Wi-Fi a přenos po síti. Čtení znamená, že si někdo ze složky bere soubory. Zápis znamená, že je do složky posílá. Když nic neběží, obě jsou 0. Dál je tam, jak dlouho PI4 běží, a řádek Procesor s teplotou. Když teplotu nejde přečíst, pohled to řekne. Pak je volné místo na systémové kartě a na datovém disku a u datového disku stav SMART. U zrcadla je jeho stav, po připojení volné místo a SMART každého disku se jménem toho disku. SMART se načte s pohledem. Teplota procesoru a přenos po síti se obnovují samy, dokud je plocha otevřená. Obsazeno se neukazuje. Nic se tím neotevírá. Vidí to i uživatel, který správu nedělá.",
                 "Tady se nic nemění. Restart a vypnutí jsou u ikony napájení vpravo nahoře.",
             ],
@@ -120,7 +120,7 @@ def texty():
                 "PISM jede naplno. Víc disků i zrcadlo jdou používat včetně zápisu. Nic se za dar nezamyká a nic se neodemkne.",
                 "Tlačítko Darovat je na ploše správce a je o něco větší. Otevře poděkování a PayPal grossmann@7ruzi.cz. Hodí se třeba 200 Kč, ale potěší i méně.",
                 "Stejné okno se při přihlášení správce otevře jen někdy, zhruba při každém čtvrtém. Když se ukázalo nedávno, další přihlášení ho přeskočí. Obnovení stránky ho znovu neotevře. Zavřít jen zavře.",
-                "Běžný účet tlačítko ani okno nevidí. V liště za PI4 už není verze ZDARMA ani verze PLNÁ.",
+                "Běžný účet tlačítko ani okno nevidí. V liště za PI4 je číslo verze. Není tam verze ZDARMA ani verze PLNÁ.",
             ],
         },
     ]}

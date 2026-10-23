@@ -1377,10 +1377,10 @@ async function nactiPrehled() {
   }
 }
 
-function ukazPlochu(ucet, polozky, spravce) {
+function ukazPlochu(ucet, polozky, spravce, verze) {
   vstup.classList.add("skryte");
   plocha.classList.remove("skryte");
-  document.querySelector("#verze").textContent = "";
+  document.querySelector("#verze").textContent = verze ? "verze " + verze : "";
   kdo.textContent = ucet;
   bezSpravy.classList.toggle("skryte", !!spravce);
   document.querySelectorAll(".jen-spravce").forEach((uzel) => uzel.classList.toggle("skryte", !spravce));
@@ -1420,12 +1420,12 @@ async function nacti() {
     return false;
   }
   if (!stav.spravce) {
-    ukazPlochu(stav.ucet, [], false);
+    ukazPlochu(stav.ucet, [], false, stav.verze);
     odeslat.disabled = false;
     return false;
   }
   const plochaOdpoved = await fetch("/api/plocha", { cache: "no-store" }).then((odpoved) => odpoved.json());
-  ukazPlochu(stav.ucet, plochaOdpoved.polozky || [], true);
+  ukazPlochu(stav.ucet, plochaOdpoved.polozky || [], true, stav.verze);
   return false;
 }
 

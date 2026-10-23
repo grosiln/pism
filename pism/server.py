@@ -167,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
                     spravce = _je_spravce(ucet, _nacti_uzivatele().get(ucet))
             self._json(200, {
                 "ok": True, "prvni": prvni, "prihlasen": bool(ucet),
-                "ucet": ucet or "", "spravce": spravce,
+                "ucet": ucet or "", "spravce": spravce, "verze": stroj.VERZE,
             })
             return
         if path == "/api/prehled":

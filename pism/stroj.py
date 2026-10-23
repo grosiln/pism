@@ -11,7 +11,7 @@ import threading
 import time
 from pathlib import Path
 
-VERZE = "1.0"
+VERZE = "1.1"
 MISTO = Path("/srv/pism")
 SLOZKY_DIR = MISTO / "slozky"
 DALSI_KOREN = Path("/srv/pism-dalsi")
