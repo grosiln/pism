@@ -281,8 +281,22 @@ button[type="submit"]:hover, #zavrit:hover { background: var(--akcent-svetly); }
 .ikona-nazev { font-size: 13px; text-align: center; line-height: 1.25; }
 
 .ikona-vetsi { width: 136px; }
-.ikona-vetsi .ikona-tvar { width: 84px; height: 84px; border-radius: 20px; }
+.ikona-vetsi .ikona-tvar {
+  width: 84px;
+  height: 84px;
+  border-radius: 20px;
+  animation: dar-tep 1.4s ease-in-out infinite;
+}
 .ikona-vetsi .ikona-nazev { font-size: 16px; }
+
+@keyframes dar-tep {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.14); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ikona-vetsi .ikona-tvar { animation: none; }
+}
 
 .vzkaz-plocha {
   color: var(--karta);
