@@ -1129,17 +1129,20 @@ async function nactiDar() {
   pripravUlozeni(null);
 }
 
-async function pockejNaNavrat() {
-  await new Promise((konec) => setTimeout(konec, 4000));
-  for (let krok = 0; krok < 20; krok += 1) {
+async function pockejNaNovouVerzi(cil) {
+  let videlMezeru = false;
+  for (let krok = 0; krok < 40; krok += 1) {
     try {
       const stav = await fetch("/api/stav", { cache: "no-store" }).then((odpoved) => odpoved.json());
-      if (stav && stav.ok) return;
+      if (stav && stav.ok && cil && stav.verze === cil && (videlMezeru || krok > 3)) return true;
+      if (stav && stav.ok && !cil && videlMezeru) return true;
+      if (stav && stav.ok && cil && stav.verze !== cil) videlMezeru = true;
     } catch (chyba) {
-      /* PISM se zrovna obnovuje. */
+      videlMezeru = true;
     }
     await new Promise((konec) => setTimeout(konec, 1000));
   }
+  return false;
 }
 
 async function nactiAktualizace() {
@@ -1152,8 +1155,14 @@ async function nactiAktualizace() {
       ukazOknoHlaseni("Aktualizuji…");
       try {
         await api("/api/aktualizace", {});
-        ukazOknoHlaseni("PISM se obnovuje. Stránka se za chvíli načte znovu.");
-        await pockejNaNavrat();
+        ukazOknoHlaseni("PISM se obnovuje. Stránka se načte znovu a budeš se muset přihlásit.");
+        const hotovo = await pockejNaNovouVerzi(data.nova || "");
+        if (!hotovo) {
+          tlacitko.disabled = false;
+          ukazOknoHlaseni("Aktualizace se nedokončila. Obnov stránku.");
+          return;
+        }
+        sessionStorage.setItem("pism-po-aktualizaci", "1");
         location.reload();
       } catch (chyba) {
         tlacitko.disabled = false;
@@ -1390,7 +1399,9 @@ function ukazPlochu(ucet, polozky, spravce, verze) {
   polozky.forEach((polozka) => {
     const tlacitko = document.createElement("button");
     tlacitko.type = "button";
-    tlacitko.className = polozka.id === "dar" ? "ikona ikona-vetsi" : "ikona";
+    tlacitko.className = polozka.id === "dar"
+      ? "ikona ikona-vetsi"
+      : (polozka.id === "aktualizace" ? "ikona ikona-aktualizace" : "ikona");
     const tvar = document.createElement("span");
     tvar.className = "ikona-tvar";
     tvar.innerHTML = tvary[polozka.id] || "";
@@ -1404,6 +1415,14 @@ function ukazPlochu(ucet, polozky, spravce, verze) {
 }
 
 async function nacti() {
+  if (sessionStorage.getItem("pism-po-aktualizaci")) {
+    sessionStorage.removeItem("pism-po-aktualizaci");
+    try {
+      await fetch("/api/odhlaseni", { method: "POST" });
+    } catch (chyba) {
+      /* Odhlášení doběhne po načtení. */
+    }
+  }
   odeslat.disabled = true;
   let stav;
   try {

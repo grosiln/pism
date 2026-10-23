@@ -133,7 +133,7 @@ def texty():
     if nova:
         vety.append(f"Teď je {stroj.VERZE}. Nová je {nova}.")
     vety.append("Účty, složky, disky, zrcadlo i síť zůstanou.")
-    return {"vety": vety, "lze": _novejsi(nova, stroj.VERZE)}
+    return {"vety": vety, "lze": _novejsi(nova, stroj.VERZE), "nova": nova}
 
 
 def _kopiruj(zdroj, cil):
