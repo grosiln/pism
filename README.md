@@ -1,5 +1,7 @@
 # PISM
 
+Aktuální verze 1.1, vystavená 23. 10. 2026.
+
 PISM je úložiště na Raspberry Pi 4. Sdílené složky, účty, disky a zrcadlo se ovládají v prohlížeči.
 
 PISM je pod licencí GrosiStudia. Další vývoj můžeš podpořit příspěvkem na PayPal grossmann@7ruzi.cz. Hodí se třeba 200 Kč, potěší i méně. Nic se tím neodemkne.
