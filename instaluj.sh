@@ -1,26 +1,29 @@
 #!/bin/bash
-# Jeden instalacni krok PISM na Raspberry Pi OS.
+# Jeden instalacni krok PISM. Spousti se z prikazoveho radku, soubor se na PI4 nekopiruje.
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Spusť to jako správce: sudo bash instaluj.sh"
+  echo "Spusť tu větu znovu se sudo na začátku."
   exit 1
 fi
 
-KORENOVA="$(cd "$(dirname "$0")" && pwd)"
-ZDROJ="$KORENOVA/pism"
+echo "PISM se stahuje a instaluje. Je potřeba internet."
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y python3 samba smartmontools mdadm curl ca-certificates tar
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+curl -fsSL "https://github.com/grosiln/pism/archive/refs/heads/main.tar.gz" -o "$TMP/pism.tar.gz"
+tar -xzf "$TMP/pism.tar.gz" -C "$TMP"
+ZDROJ="$TMP/pism-main/pism"
 CIL="/home/pi/pism"
 
 if [ ! -f "$ZDROJ/server.py" ]; then
   echo "Instalace nenašla program."
   exit 1
 fi
-
-echo "PISM se instaluje. Je potřeba internet, program už je v téhle složce."
-
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y python3 samba smartmontools mdadm
 
 install -d -m 755 /home/pi "$CIL" "$CIL/web" "$CIL/data"
 
@@ -69,6 +72,7 @@ systemctl enable --now pism-sit.service
 if [ -f "$CIL/data/uzivatele.json" ]; then
   echo "Dosavadní účty a složky zůstaly."
 else
+  echo "PISM je prázdné. Nejsou v něm účty, sdílené složky ani připojené disky."
   echo "První otevření v prohlížeči si řekne o heslo správce."
 fi
 
@@ -78,4 +82,5 @@ if [ -n "${adresa:-}" ]; then
 else
   echo "V prohlížeči otevři adresu tohoto PI4."
 fi
+echo "Je to běžné http, port 80. Za adresu se číslo portu nepíše."
 echo "PISM je nainstalované."
