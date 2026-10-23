@@ -1,0 +1,12 @@
+pism/data/
+__pycache__/
+*.pyc
+pism.md
+pism/licence_klic.py
+proti_kod.py
+proti_kod.bat
+spustit.bat
+hotovo.md
+ukoly.md
+odlozene_ukoly.md
+.cursor/

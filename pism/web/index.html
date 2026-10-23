@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PISM</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="vstup">
+    <form id="formular" class="karta">
+      <p class="znacka">PISM</p>
+      <p class="podnadpis">Úložiště na PI4</p>
+      <h1 id="vstup-nadpis">Přihlášení</h1>
+      <p id="vstup-popis"></p>
+      <label id="ucet-pole" class="pole">
+        <span>Účet</span>
+        <input id="ucet" type="text" autocomplete="username" value="admin">
+      </label>
+      <label class="pole">
+        <span>Heslo</span>
+        <input id="heslo" type="password" autocomplete="current-password" required>
+      </label>
+      <label id="znovu-pole" class="pole skryte">
+        <span>Heslo znovu</span>
+        <input id="znovu" type="password" autocomplete="new-password">
+      </label>
+      <p id="hlaseni" class="hlaseni" role="alert"></p>
+      <button id="odeslat" type="submit">Vstoupit</button>
+    </form>
+  </section>
+
+  <section id="plocha" class="skryte">
+    <header class="lista">
+      <div class="znacka-lista">PISM <span>PI4</span><span id="verze" class="verze"></span></div>
+      <div class="lista-stred">
+        <img src="/grosistudio-logo.png" alt="">
+        <span>GrosiStudio 2026</span>
+      </div>
+      <div class="lista-ucet">
+        <span id="kdo"></span>
+        <div class="napajeni">
+          <button id="napajeni" type="button" aria-label="Napájení">
+            <svg viewBox="0 0 48 48" width="22" height="22" aria-hidden="true"><path d="M24 8 v12" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M16 14 a12 12 0 1 0 16 0" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/></svg>
+          </button>
+          <div id="napajeni-menu" class="napajeni-menu skryte">
+            <button id="odhlasit" type="button">Odhlásit</button>
+            <button id="restartovat" type="button" class="jen-spravce">Restartovat</button>
+            <button id="vypnout" type="button" class="jen-spravce">Vypnout</button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <div class="plocha-telo">
+      <div>
+        <p id="bez-spravy" class="vzkaz-plocha skryte">Tento účet je uživatel. Slouží ke složkám a službám, správu PISM nedělá.</p>
+        <div id="ikony" class="ikony"></div>
+      </div>
+      <aside id="prehled" aria-label="Přehled"></aside>
+    </div>
+  </section>
+
+  <div id="okno" class="okno skryte">
+    <div class="karta okno-karta" role="dialog" aria-modal="true" aria-labelledby="okno-nazev">
+      <h2 id="okno-nazev"></h2>
+      <div id="okno-telo"></div>
+      <p id="okno-hlaseni" class="hlaseni" role="alert"></p>
+      <button id="zavrit" type="button">Zavřít</button>
+    </div>
+  </div>
+
+  <div id="edit" class="okno edit skryte">
+    <div class="karta okno-karta edit-karta" role="dialog" aria-modal="true" aria-labelledby="edit-nazev">
+      <h2 id="edit-nazev"></h2>
+      <div id="edit-telo"></div>
+      <p id="edit-hlaseni" class="hlaseni" role="alert"></p>
+      <button id="edit-zavrit" type="button">Zavřít</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
