@@ -69,6 +69,28 @@ systemctl enable --now pism.service
 systemctl enable --now pism-vetrak.service
 systemctl enable --now pism-sit.service
 
+# Tiché hlášení počtu. Stejná značka zůstane na tomhle PI4, druhé spuštění ji nezvedne.
+# Když stránka neodpoví, instalace stejně skončí. Jméno, adresa a disky se neposílají.
+instalace_znacka() {
+  local slozka="/var/lib/pism"
+  local soubor="$slozka/znacka"
+  local znacka=""
+  if [ -s "$soubor" ]; then
+    znacka="$(tr -d ' \n\r' < "$soubor" || true)"
+  fi
+  if ! printf '%s' "$znacka" | grep -Eq '^[a-f0-9]{32}$'; then
+    install -d -m 755 "$slozka"
+    znacka="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+    printf '%s\n' "$znacka" > "$soubor"
+    chmod 600 "$soubor"
+  fi
+  curl -fs --max-time 8 -o /dev/null \
+    --data-urlencode "znacka=${znacka}" \
+    "https://www.7ruzi.cz/pism/oznamit.php" \
+    || true
+}
+instalace_znacka || true
+
 if [ -f "$CIL/data/uzivatele.json" ]; then
   echo "Dosavadní účty a složky zůstaly."
 else
