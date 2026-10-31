@@ -301,6 +301,15 @@ button[type="submit"]:hover, #zavrit:hover { background: var(--akcent-svetly); }
   50% { transform: scale(1.22); box-shadow: 0 0 0 10px rgba(230, 194, 122, 0.55); }
 }
 
+.ikona-studio .ikona-tvar img {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.poznamka strong { font-weight: 800; }
+
 .ikona-aktualizace .ikona-tvar {
   background: var(--zlato);
   color: var(--inkoust);

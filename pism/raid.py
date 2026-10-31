@@ -138,7 +138,7 @@ def konfigurace():
             "lze": False,
             "disky": [],
             "slozky": [],
-            "vety": ["Tyto disky už jsou v zrcadle."],
+            "vety": ["Tyhle disky pořád nesou zrcadlo mimo PISM. Znovu se nevezmou a v Přidat disk nejsou."],
         }
     pary = [disk for disk in disky if disk["klic"]]
     verejne = [
@@ -294,6 +294,7 @@ def _fstab_zrcadlo(uuid):
 
 
 def prehled_zrcadla():
+    uklid_odebrane()
     try:
         radky = Path("/proc/mdstat").read_text(encoding="utf-8").splitlines()
     except OSError:
@@ -485,4 +486,232 @@ def zaloz(jmena):
     except stroj.StrojChyba as chyba:
         raise stroj.StrojChyba("Disk se nepodařilo smazat. Zrcadlo se nezaložilo.") from chyba
     _zaloz_pole(hotove)
+    return stroj.disky()
+
+
+def _aktivni_zarizeni():
+    if Path("/dev/md/pism").exists() and _pole_bezi():
+        return "/dev/md/pism"
+    try:
+        for radek in Path("/proc/mdstat").read_text(encoding="utf-8").splitlines():
+            if radek.startswith("md") and "active" in radek:
+                cesta = Path("/dev") / radek.split()[0]
+                if cesta.exists():
+                    return str(cesta)
+    except OSError:
+        pass
+    return ""
+
+
+def _stejne(prvni, druhy):
+    try:
+        return Path(prvni).resolve() == Path(druhy).resolve()
+    except OSError:
+        return False
+
+
+def _normalni_uuid(text):
+    text = str(text or "").strip().lower()
+    if re.fullmatch(r"[0-9a-f]{8}(?::[0-9a-f]{8}){3}", text):
+        return text
+    ciste = re.sub(r"[^0-9a-f]", "", text)
+    if len(ciste) == 32:
+        return ":".join(ciste[poradi:poradi + 8] for poradi in range(0, 32, 8))
+    return ""
+
+
+def _uuid_pole(zarizeni):
+    try:
+        text = stroj._beh(["mdadm", "--detail", "--export", zarizeni]).stdout
+    except stroj.StrojChyba:
+        return ""
+    for radek in text.splitlines():
+        if radek.startswith("MD_UUID="):
+            return _normalni_uuid(radek.split("=", 1)[1])
+    return ""
+
+
+def _clenove(zarizeni):
+    try:
+        text = stroj._beh(["mdadm", "--detail", zarizeni]).stdout
+    except stroj.StrojChyba:
+        return []
+    nalezene = []
+    for radek in text.splitlines():
+        for shoda in re.findall(r"(/dev/sd[a-z]+\d*)", radek):
+            if shoda not in nalezene:
+                nalezene.append(shoda)
+    return nalezene
+
+
+def _pole_je_hlavni(zarizeni):
+    zdroj = _zdroj_pripojeni(stroj.MISTO)
+    return bool(zdroj) and _stejne(zdroj, zarizeni)
+
+
+def _zapis_mdadm(uuid, ignorovat):
+    uuid = _normalni_uuid(uuid)
+    radky = MDADM.read_text(encoding="utf-8").splitlines() if MDADM.exists() else []
+    nove = []
+    for radek in radky:
+        nizky = radek.lower()
+        if radek.startswith("ARRAY") and ("pism" in nizky or (uuid and uuid in nizky) or "<ignore>" in nizky):
+            continue
+        nove.append(radek)
+    if ignorovat and uuid:
+        nove.append(f"ARRAY <ignore> UUID={uuid}")
+    MDADM.parent.mkdir(parents=True, exist_ok=True)
+    MDADM.write_text(("\n".join(nove).rstrip() + "\n") if nove else "", encoding="utf-8")
+
+
+def _odeber_fstab_zrcadla(bylo_hlavni):
+    if not stroj.FSTAB.exists():
+        return
+    nove = []
+    for line in stroj.FSTAB.read_text(encoding="utf-8").splitlines():
+        if "pism-zrcadlo" in line:
+            continue
+        if bylo_hlavni and "pism-svazek" in line:
+            continue
+        nove.append(line)
+    stroj.FSTAB.write_text(("\n".join(nove).rstrip() + "\n") if nove else "", encoding="utf-8")
+
+
+def _vrat_slozky(puvod):
+    stroj._uloz_slozky(puvod)
+    try:
+        stroj._samba()
+    except stroj.StrojChyba:
+        pass
+
+
+def _uvolni_zrcadlo(zarizeni, klice, hlaseni):
+    puvod = stroj._nacti_slozky()
+    nech = {
+        nazev: zaznam for nazev, zaznam in puvod.items()
+        if stroj._klic_slozky(zaznam) not in klice
+    }
+    stroj._uloz_slozky(nech)
+    try:
+        stroj._samba()
+        stroj._odpoj_ftp()
+        for misto in (RAID_MISTO, stroj.MISTO):
+            if not misto.is_mount():
+                continue
+            zdroj = _zdroj_pripojeni(misto)
+            if misto == RAID_MISTO or (zdroj and _stejne(zdroj, zarizeni)):
+                stroj._beh(["umount", str(misto)])
+    except stroj.StrojChyba as chyba:
+        _vrat_slozky(puvod)
+        if "FTP" in str(chyba):
+            raise
+        raise stroj.StrojChyba(hlaseni) from chyba
+    return puvod
+
+
+def _obnov_initramfs():
+    if not shutil.which("update-initramfs"):
+        return
+    try:
+        stroj._beh(["update-initramfs", "-u"], cas=180)
+    except stroj.StrojChyba:
+        pass
+
+
+def uklid_odebrane():
+    mimo = {_normalni_uuid(polozka) for polozka in stroj.mimo_zrcadla()}
+    mimo.discard("")
+    if not mimo:
+        return
+    zarizeni = _aktivni_zarizeni()
+    if not zarizeni:
+        return
+    if _uuid_pole(zarizeni) not in mimo:
+        return
+    try:
+        for misto in (RAID_MISTO, stroj.MISTO):
+            if not misto.is_mount():
+                continue
+            zdroj = _zdroj_pripojeni(misto)
+            if zdroj and _stejne(zdroj, zarizeni):
+                stroj._beh(["umount", str(misto)])
+        stroj._beh(["mdadm", "--stop", zarizeni])
+    except stroj.StrojChyba:
+        return
+
+
+def _priprav_zrcadlo(hlaseni):
+    if not _pole_bezi():
+        raise stroj.StrojChyba("Zrcadlo není v PISM.")
+    zarizeni = _aktivni_zarizeni()
+    if not zarizeni:
+        raise stroj.StrojChyba("Zrcadlo není v PISM.")
+    uuid = _uuid_pole(zarizeni)
+    if not uuid:
+        raise stroj.StrojChyba(hlaseni)
+    bylo_hlavni = _pole_je_hlavni(zarizeni)
+    klice = {"hlavni"} if bylo_hlavni else {"zrcadlo"}
+    if not bylo_hlavni:
+        klice.add("zrcadlo")
+    return zarizeni, uuid, bylo_hlavni, klice
+
+
+def formatuj():
+    zarizeni, _uuid, bylo_hlavni, klice = _priprav_zrcadlo("Zrcadlo se nepodařilo naformátovat.")
+    bylo_pripojene = RAID_MISTO.is_mount() or bylo_hlavni
+    _uvolni_zrcadlo(zarizeni, klice, "Zrcadlo se nepodařilo naformátovat.")
+    stitek = "PISM" if bylo_hlavni else "PISMRAID"
+    cil = stroj.MISTO if bylo_hlavni else RAID_MISTO
+    try:
+        stroj._beh(["mkfs.ext4", "-F", "-L", stitek, zarizeni], cas=300)
+        if bylo_pripojene:
+            uuid = _znacka(zarizeni)
+            cil.mkdir(parents=True, exist_ok=True)
+            stroj._beh(["mount", zarizeni, str(cil)])
+            if bylo_hlavni:
+                stroj._fstab(uuid)
+                stroj._skupina()
+                stroj.SLOZKY_DIR.mkdir(parents=True, exist_ok=True)
+                stroj._vlastnik(stroj.SLOZKY_DIR)
+            else:
+                _fstab_zrcadlo(uuid)
+                koren = RAID_MISTO / "slozky"
+                koren.mkdir(parents=True, exist_ok=True)
+                stroj._vlastnik(koren)
+        else:
+            _odeber_fstab_zrcadla(False)
+    except stroj.StrojChyba as chyba:
+        raise stroj.StrojChyba("Zrcadlo se nepodařilo naformátovat.") from chyba
+    try:
+        stroj._samba()
+    except stroj.StrojChyba:
+        pass
+    return stroj.disky()
+
+
+def odeber(smazat=False):
+    zarizeni, uuid, bylo_hlavni, klice = _priprav_zrcadlo("Zrcadlo se nepodařilo odebrat.")
+    clenove = _clenove(zarizeni)
+    if smazat and not clenove:
+        raise stroj.StrojChyba("Zrcadlo se nepodařilo smazat.")
+    puvod = _uvolni_zrcadlo(zarizeni, klice, "Zrcadlo se nepodařilo odebrat.")
+    _odeber_fstab_zrcadla(bylo_hlavni)
+    try:
+        stroj._beh(["mdadm", "--stop", zarizeni])
+    except stroj.StrojChyba as chyba:
+        _vrat_slozky(puvod)
+        raise stroj.StrojChyba("Zrcadlo se nepodařilo odebrat.") from chyba
+    try:
+        if smazat:
+            for clen in clenove:
+                stroj._beh(["mdadm", "--zero-superblock", clen], cas=120)
+                stroj._beh(["wipefs", "-a", clen], cas=120)
+            _zapis_mdadm(uuid, False)
+            stroj.odeber_mimo_zrcadlo(uuid)
+        else:
+            _zapis_mdadm(uuid, True)
+            stroj.pridej_mimo_zrcadlo(uuid)
+            _obnov_initramfs()
+    except stroj.StrojChyba as chyba:
+        raise stroj.StrojChyba("Zrcadlo se nepodařilo smazat." if smazat else "Zrcadlo se nepodařilo odebrat.") from chyba
     return stroj.disky()

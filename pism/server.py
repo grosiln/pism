@@ -47,6 +47,7 @@ PLOCHA = [
     {"id": "cas", "nazev": "Datum a čas"},
     {"id": "system", "nazev": "Informace o systému"},
     {"id": "napoveda", "nazev": "Nápověda"},
+    {"id": "studio", "nazev": "GrosiStudio"},
     {"id": "dar", "nazev": "Darovat"},
 ]
 
@@ -244,8 +245,12 @@ class Handler(BaseHTTPRequestHandler):
             "/api/sit/wifi": lambda: stroj.wifi_pripoj(data.get("ssid"), data.get("heslo")),
             "/api/disky/svazek": lambda: self._svazek(data),
             "/api/disky/smazat": lambda: self._smaz_disk(data),
+            "/api/disky/odebrat": lambda: self._odeber_disk(data),
+            "/api/disky/format": lambda: self._format_disk(data),
             "/api/disky/raid/pripojit": lambda: raid.pripoj(),
             "/api/disky/raid/zalozit": lambda: self._raid(data),
+            "/api/disky/raid/odebrat": lambda: self._odeber_raid(data),
+            "/api/disky/raid/format": lambda: self._format_raid(data),
             "/api/uzivatele": lambda: self._novy_ucet(data),
             "/api/uzivatele/upravit": lambda: self._upravit_ucet(data),
             "/api/uzivatele/smazat": lambda: self._odeber_ucet(data),
@@ -336,6 +341,26 @@ class Handler(BaseHTTPRequestHandler):
         if str(data.get("potvrzeni", "")) != "SMAZAT":
             raise stroj.StrojChyba("Pro smazání disku napiš SMAZAT.")
         return stroj.smaz_disk(str(data.get("disk") or "hlavni"))
+
+    def _odeber_disk(self, data):
+        if str(data.get("potvrzeni", "")) != "ODEBRAT":
+            raise stroj.StrojChyba("Pro odebrání napiš ODEBRAT.")
+        return stroj.odeber_disk(str(data.get("disk") or "hlavni"), data.get("smazat") is True)
+
+    def _format_disk(self, data):
+        if str(data.get("potvrzeni", "")) != "SMAZAT":
+            raise stroj.StrojChyba("Pro formát napiš SMAZAT.")
+        return stroj.formatuj_disk(str(data.get("disk") or "hlavni"))
+
+    def _odeber_raid(self, data):
+        if str(data.get("potvrzeni", "")) != "ODEBRAT":
+            raise stroj.StrojChyba("Pro odebrání napiš ODEBRAT.")
+        return raid.odeber(data.get("smazat") is True)
+
+    def _format_raid(self, data):
+        if str(data.get("potvrzeni", "")) != "SMAZAT":
+            raise stroj.StrojChyba("Pro formát napiš SMAZAT.")
+        return raid.formatuj()
 
     def _raid(self, data):
         if str(data.get("potvrzeni", "")) != "SMAZAT":
@@ -503,6 +528,10 @@ def _dar_pri_vstupu(ucet):
 def main():
     try:
         licence.uplatni()
+    except Exception:
+        pass
+    try:
+        raid.uklid_odebrane()
     except Exception:
         pass
     ThreadingHTTPServer.allow_reuse_address = True

@@ -11,14 +11,15 @@ import threading
 import time
 from pathlib import Path
 
-VERZE = "1.1"
-VYSTAVENO = "23. 10. 2026"
+VERZE = "1.2"
+VYSTAVENO = "31. 10. 2026"
 MISTO = Path("/srv/pism")
 SLOZKY_DIR = MISTO / "slozky"
 DALSI_KOREN = Path("/srv/pism-dalsi")
 ZNACKA_DALSI = "PISMDISK"
 DATA = Path(__file__).resolve().parent / "data"
 SOUBOR_SLOZEK = DATA / "slozky.json"
+SOUBOR_MIMO = DATA / "mimo.json"
 SMB = Path("/etc/samba/pism.conf")
 SMB_HLAVNI = Path("/etc/samba/smb.conf")
 FSTAB = Path("/etc/fstab")
@@ -99,18 +100,15 @@ def _ma_svazek_pism(disk):
 
 
 def _datovy():
-    usb = [
+    se_svazkem = [
         polozka for polozka in _blokova()
-        if polozka.get("type") == "disk" and polozka.get("tran") == "usb" and not _je_system(polozka)
+        if polozka.get("type") == "disk" and polozka.get("tran") == "usb" and not _je_system(polozka) and _ma_svazek_pism(polozka)
     ]
-    if not usb:
-        raise StrojChyba("Na USB není datový disk.")
-    se_svazkem = [disk for disk in usb if _ma_svazek_pism(disk)]
     if len(se_svazkem) == 1:
         return se_svazkem[0]
-    if len(usb) > 1:
+    if len(se_svazkem) > 1:
         raise StrojChyba("Je připojených víc disků na USB. Nech zapojený jen ten na zkoušky.")
-    return usb[0]
+    raise StrojChyba("Na USB není datový disk.")
 
 
 def _cesta_disku(jmeno):
@@ -127,9 +125,10 @@ def _oddil(disk):
 
 
 def _odpoj(misto):
-    if not misto or misto == str(MISTO):
-        if misto:
-            _beh(["umount", misto])
+    if not misto or not Path(misto).is_mount():
+        return
+    if misto == str(MISTO):
+        _beh(["umount", misto])
         return
     chranene = {"/", "/boot", "/boot/firmware", "/home", "/usr", "/var", "/etc", "/srv"}
     if misto in chranene or misto.startswith("/boot/"):
@@ -260,7 +259,7 @@ def _kandidati():
         jmeno = str(disk.get("name") or "")
         if not jmeno or jmeno.startswith(("mmc", "loop", "zram", "md")):
             continue
-        if _ma_svazek_pism(disk) or _je_dalsi(disk) or _je_v_poli(disk):
+        if _ma_svazek_pism(disk) or _je_dalsi(disk) or _je_v_poli(disk) or _ma_znacku(disk, "PISM"):
             continue
         try:
             bajty = int(disk.get("size") or 0)
@@ -274,6 +273,10 @@ def _kandidati():
             "velikost": _lidske(bajty),
         })
     return vysledek
+
+
+def _ma_znacku(disk, znacka):
+    return any((dite.get("label") or "") == znacka for dite in _potomci(disk))
 
 
 def _je_dalsi(disk):
@@ -621,7 +624,83 @@ def _odeber_svazek_z_fstab():
     FSTAB.write_text(("\n".join(radky).rstrip() + "\n") if radky else "", encoding="utf-8")
 
 
-def smaz_disk(klic="hlavni"):
+def _nacti_mimo():
+    if not SOUBOR_MIMO.is_file():
+        return []
+    try:
+        data = json.loads(SOUBOR_MIMO.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    zrcadla = data.get("zrcadla") if isinstance(data, dict) else None
+    if not isinstance(zrcadla, list):
+        return []
+    return [str(polozka) for polozka in zrcadla if str(polozka)]
+
+
+def _uloz_mimo(zrcadla):
+    DATA.mkdir(parents=True, exist_ok=True)
+    SOUBOR_MIMO.write_text(
+        json.dumps({"zrcadla": zrcadla}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def mimo_zrcadla():
+    return _nacti_mimo()
+
+
+def pridej_mimo_zrcadlo(znacka):
+    znacka = str(znacka or "")
+    if not znacka:
+        return
+    zrcadla = _nacti_mimo()
+    if znacka not in zrcadla:
+        zrcadla.append(znacka)
+        _uloz_mimo(zrcadla)
+
+
+def odeber_mimo_zrcadlo(znacka):
+    znacka = str(znacka or "")
+    zrcadla = [polozka for polozka in _nacti_mimo() if polozka != znacka]
+    _uloz_mimo(zrcadla)
+
+
+def _vrat_slozky(puvod):
+    _uloz_slozky(puvod)
+    try:
+        _samba()
+    except StrojChyba:
+        pass
+
+
+def _uvolni_slozky(klice, mista, hlaseni):
+    puvod = _nacti_slozky()
+    nech = {nazev: zaznam for nazev, zaznam in puvod.items() if _klic_slozky(zaznam) not in klice}
+    _uloz_slozky(nech)
+    try:
+        _samba()
+        _odpoj_ftp()
+        for misto in mista:
+            if misto and Path(misto).is_mount():
+                _beh(["umount", str(misto)])
+    except StrojChyba as chyba:
+        _vrat_slozky(puvod)
+        if "FTP" in str(chyba):
+            raise
+        raise StrojChyba(hlaseni) from chyba
+
+
+def _vycisti_disk(blok, jmeno):
+    for dite in _potomci(blok):
+        if dite.get("type") != "part":
+            continue
+        cesta_oddilu = _cesta_disku(dite.get("name"))
+        if cesta_oddilu.exists():
+            _beh(["wipefs", "-a", str(cesta_oddilu)], cas=120)
+    _beh(["wipefs", "-a", str(_cesta_disku(jmeno))], cas=120)
+
+
+def _datovy_klic(klic):
     klic = str(klic or "hlavni")
     cil = next((disk for disk in _seznam_datovych() if disk["klic"] == klic), None)
     if not cil:
@@ -629,24 +708,41 @@ def smaz_disk(klic="hlavni"):
     blok = _blok_podle_jmena(cil["jmeno"])
     if _je_system(blok) or str(blok.get("name") or "").startswith("mmc"):
         raise StrojChyba("Systémová karta se nemaže.")
-    _odpoj_ftp()
-    if Path(cil["misto"]).is_mount():
-        try:
-            _beh(["umount", cil["misto"]])
-        except StrojChyba as chyba:
-            raise StrojChyba("Datový disk se nepodařilo odpojit.") from chyba
-    _odeber_mista_z_fstab([cil["misto"]])
-    for dite in _potomci(blok):
-        if dite.get("type") != "part":
-            continue
-        cesta_oddilu = _cesta_disku(dite.get("name"))
-        if cesta_oddilu.exists():
-            _beh(["wipefs", "-a", str(cesta_oddilu)], cas=120)
-    _beh(["wipefs", "-a", str(_cesta_disku(cil["jmeno"]))], cas=120)
-    data = _nacti_slozky()
-    _uloz_slozky({nazev: zaznam for nazev, zaznam in data.items() if _klic_slozky(zaznam) != klic})
-    _samba()
+    return cil, blok
+
+
+def formatuj_disk(klic="hlavni"):
+    cil, blok = _datovy_klic(klic)
+    _uvolni_slozky({cil["klic"]}, [cil["misto"]], "Disk se nepodařilo naformátovat.")
+    try:
+        if cil["hlavni"]:
+            _zaloz_hlavni(blok)
+        else:
+            _zaloz_dalsi(blok)
+            _odeber_mista_z_fstab([cil["misto"]])
+    except StrojChyba as chyba:
+        raise StrojChyba("Disk se nepodařilo naformátovat.") from chyba
+    try:
+        _samba()
+    except StrojChyba:
+        pass
     return disky()
+
+
+def odeber_disk(klic="hlavni", smazat=False):
+    cil, blok = _datovy_klic(klic)
+    _uvolni_slozky({cil["klic"]}, [cil["misto"]], "Disk se nepodařilo odebrat.")
+    _odeber_mista_z_fstab([cil["misto"]])
+    if smazat:
+        try:
+            _vycisti_disk(blok, cil["jmeno"])
+        except StrojChyba as chyba:
+            raise StrojChyba("Disk se nepodařilo smazat.") from chyba
+    return disky()
+
+
+def smaz_disk(klic="hlavni"):
+    return odeber_disk(klic, True)
 
 
 def zajisti_ucet(ucet, heslo):

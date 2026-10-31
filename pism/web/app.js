@@ -47,6 +47,7 @@ const tvary = {
   cas: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M24 14 v11 l7 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   system: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M24 20 v12" stroke="currentColor" stroke-width="2"/><circle cx="24" cy="15" r="1.6" fill="currentColor"/></svg>',
   napoveda: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M18 19 a6 6 0 1 1 8 5 c-2 1.4-2 2-2 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="24" cy="33" r="1.6" fill="currentColor"/></svg>',
+  studio: '<img src="/grosistudio-logo.png" alt="" width="46" height="46">',
   dar: '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path d="M24 40 s-12-7.4-16.5-14.2C4.2 21.2 6.2 15 11.6 13.6 15.4 12.6 18.6 14.2 24 19.2c5.4-5 8.6-6.6 12.4-5.6 5.4 1.4 7.4 7.6 4.1 12.2C36 32.6 24 40 24 40z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>',
   aktualizace: '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><path d="M16 18 a12 12 0 1 1-2 10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 12 v8 h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
 };
@@ -214,6 +215,15 @@ function otevriEdit(nazev, obsah) {
   ukazEditHlaseni("");
   editTelo.replaceChildren(obsah);
   edit.classList.remove("skryte");
+}
+
+function tlacitkoAkce(nazev, otevrit) {
+  const tlacitko = el("button", { type: "button", className: "male", textContent: nazev });
+  tlacitko.addEventListener("click", (udalost) => {
+    udalost.stopPropagation();
+    otevrit();
+  });
+  return tlacitko;
 }
 
 function tlacitkoUpravit(otevrit) {
@@ -535,6 +545,10 @@ function kartaZrcadla(disk) {
   if (disk.velikost) deti.push(el("p", { class: "poznamka", text: disk.velikost }));
   if (disk.pripojeno && disk.volno) deti.push(el("p", { class: "poznamka", text: "volno " + disk.volno }));
   else if (disk.poznamka) deti.push(el("p", { class: "poznamka", text: disk.poznamka }));
+  const akce = [
+    tlacitkoAkce("Odebrat", otevriOdebraniZrcadla),
+    tlacitkoAkce("Formát", otevriFormatZrcadla)
+  ];
   if (!disk.pripojeno) {
     const pripojit = el("button", { type: "button", className: "male", textContent: "Připojit" });
     pripojit.addEventListener("click", async () => {
@@ -547,8 +561,9 @@ function kartaZrcadla(disk) {
         ukazOknoHlaseni(chyba.message);
       }
     });
-    deti.push(el("div", { class: "akce" }, [pripojit]));
+    akce.push(pripojit);
   }
+  deti.push(el("div", { class: "akce" }, akce));
   return el("div", { class: "blok" }, deti);
 }
 
@@ -618,18 +633,83 @@ async function otevriSmart(klic) {
   }
 }
 
-function otevriSmazaniDisku(klic, model) {
-  const potvrzeni = el("input", { type: "text", placeholder: "SMAZAT", autocomplete: "off" });
-  const smazat = el("button", { type: "button", className: "nebezpeci", textContent: "Smazat disk" });
-  smazat.addEventListener("click", () => odejitSUlozenim(async () => {
-    await api("/api/disky/smazat", { potvrzeni: potvrzeni.value, disk: klic || "hlavni" });
+function otevriPotvrzeni(nazev, vety, slovo, tlacitkoNazev, potvrdit) {
+  const potvrzeni = el("input", { type: "text", placeholder: slovo, autocomplete: "off" });
+  const tlacitko = el("button", { type: "button", className: "nebezpeci", textContent: tlacitkoNazev });
+  tlacitko.addEventListener("click", () => odejitSUlozenim(async () => {
+    if (potvrzeni.value !== slovo) throw new Error("Pro potvrzení napiš " + slovo + ".");
+    await potvrdit(potvrzeni.value);
   }));
-  const nazev = model ? "Datový disk " + model : "Datový disk";
   otevriEdit(nazev, el("div", {}, [
-    el("p", { class: "poznamka", text: "Smaže se jen tenhle disk a složky na něm. Ostatní disky a jejich složky zůstanou. Systémová karta zůstane. Nejde to vrátit. Pro potvrzení napiš SMAZAT." }),
-    radekFormulare([potvrzeni, smazat])
+    ...vety.map((text) => el("p", { class: "poznamka", text })),
+    el("p", { class: "poznamka", text: "Pro potvrzení napiš " + slovo + "." }),
+    radekFormulare([potvrzeni, tlacitko])
   ]));
   pripravUlozeni(null);
+}
+
+function otevriOdebrani(nazev, uvod, bez, se, zaskrtnuti, potvrdit) {
+  const zaskrt = el("input", { type: "checkbox" });
+  const veta = el("p", { class: "poznamka", text: bez });
+  zaskrt.addEventListener("change", () => {
+    veta.textContent = zaskrt.checked ? se : bez;
+  });
+  const potvrzeni = el("input", { type: "text", placeholder: "ODEBRAT", autocomplete: "off" });
+  const tlacitko = el("button", { type: "button", className: "nebezpeci", textContent: "Odebrat" });
+  tlacitko.addEventListener("click", () => odejitSUlozenim(async () => {
+    if (potvrzeni.value !== "ODEBRAT") throw new Error("Pro odebrání napiš ODEBRAT.");
+    await potvrdit(zaskrt.checked, potvrzeni.value);
+  }));
+  otevriEdit(nazev, el("div", {}, [
+    ...uvod.map((text) => el("p", { class: "poznamka", text })),
+    el("label", { class: "volba" }, [zaskrt, el("span", { text: zaskrtnuti })]),
+    veta,
+    el("p", { class: "poznamka", text: "Pro potvrzení napiš ODEBRAT." }),
+    radekFormulare([potvrzeni, tlacitko])
+  ]));
+  pripravUlozeni(null);
+}
+
+function otevriOdebraniDisku(klic, model) {
+  otevriOdebrani(
+    model ? "Odebrat " + model : "Odebrat disk",
+    ["Disk se vyřadí z PISM. Složky na něm ze seznamu zmizí. Ostatní disky i zrcadlo zůstanou. Účty zůstanou."],
+    "Disk se nesmaže a data na něm zůstanou. Jiný Linux je přečte přímo. Ve Windows se samy neotevřou.",
+    "Disk se smaže a data nejdou vrátit.",
+    "Smazat data na disku",
+    (smazat, potvrzeni) => api("/api/disky/odebrat", { potvrzeni, disk: klic || "hlavni", smazat })
+  );
+}
+
+function otevriFormatDisku(klic, model) {
+  otevriPotvrzeni(
+    model ? "Formát " + model : "Formát",
+    ["Formát disk smaže a data nejdou vrátit. Disk v PISM zůstane, jen prázdný. Složky na něm ze seznamu zmizí. Ostatní disky i zrcadlo zůstanou. Účty zůstanou."],
+    "SMAZAT",
+    "Formátovat",
+    (potvrzeni) => api("/api/disky/format", { potvrzeni, disk: klic || "hlavni" })
+  );
+}
+
+function otevriOdebraniZrcadla() {
+  otevriOdebrani(
+    "Odebrat zrcadlo",
+    ["Zrcadlo se vyřadí z PISM. Složky na něm ze seznamu zmizí. Oba disky odejdou z konfigurace. Ostatní disky zůstanou. Účty zůstanou."],
+    "Disky se nesmažou a data na nich zůstanou. Jiný Linux je přečte, když zrcadlo znovu složí. Stačí i jeden disk. Ve Windows se samy neotevřou.",
+    "Disky se smažou a data nejdou vrátit.",
+    "Smazat data na discích",
+    (smazat, potvrzeni) => api("/api/disky/raid/odebrat", { potvrzeni, smazat })
+  );
+}
+
+function otevriFormatZrcadla() {
+  otevriPotvrzeni(
+    "Formát zrcadla",
+    ["Formát zrcadlo smaže a data nejdou vrátit. Zrcadlo v PISM zůstane, jen prázdné. Složky na něm ze seznamu zmizí. Ostatní disky zůstanou. Účty zůstanou."],
+    "SMAZAT",
+    "Formátovat",
+    (potvrzeni) => api("/api/disky/raid/format", { potvrzeni })
+  );
 }
 
 function otevriKonfiguraciRaidu() {
@@ -720,7 +800,8 @@ async function nactiDisky() {
     ];
     if (!disk.systemovy) {
       deti.push(el("div", { class: "akce" }, [
-        tlacitkoUpravit(() => otevriSmazaniDisku(disk.klic, disk.model)),
+        tlacitkoAkce("Odebrat", () => otevriOdebraniDisku(disk.klic, disk.model)),
+        tlacitkoAkce("Formát", () => otevriFormatDisku(disk.klic, disk.model)),
         tlacitkoSmart(disk.klic)
       ]));
     }
@@ -1121,10 +1202,24 @@ async function nactiCas() {
   );
 }
 
+function odstavecSMailem(text) {
+  const mail = "grossmann@7ruzi.cz";
+  const odstavec = el("p", { class: "poznamka" });
+  String(text).split(mail).forEach((kus, poradi, kusy) => {
+    if (kus) odstavec.append(document.createTextNode(kus));
+    if (poradi < kusy.length - 1) {
+      const tucne = document.createElement("strong");
+      tucne.textContent = mail;
+      odstavec.append(tucne);
+    }
+  });
+  return odstavec;
+}
+
 async function nactiDar() {
   const data = await api("/api/dar");
   oknoTelo.replaceChildren(el("div", { class: "na-sirku" },
-    (data.vety || []).map((veta) => el("p", { class: "poznamka", text: veta }))
+    (data.vety || []).map((veta) => odstavecSMailem(veta))
   ));
   pripravUlozeni(null);
 }
@@ -1402,7 +1497,7 @@ function ukazPlochu(ucet, polozky, spravce, verze, vystaveno) {
     tlacitko.type = "button";
     tlacitko.className = polozka.id === "dar"
       ? "ikona ikona-vetsi"
-      : (polozka.id === "aktualizace" ? "ikona ikona-aktualizace" : "ikona");
+      : (polozka.id === "aktualizace" ? "ikona ikona-aktualizace" : (polozka.id === "studio" ? "ikona ikona-studio" : "ikona"));
     const tvar = document.createElement("span");
     tvar.className = "ikona-tvar";
     tvar.innerHTML = tvary[polozka.id] || "";
@@ -1410,7 +1505,13 @@ function ukazPlochu(ucet, polozky, spravce, verze, vystaveno) {
     nazev.className = "ikona-nazev";
     nazev.textContent = polozka.nazev;
     tlacitko.append(tvar, nazev);
-    tlacitko.addEventListener("click", () => otevri(polozka));
+    tlacitko.addEventListener("click", () => {
+      if (polozka.id === "studio") {
+        window.open("https://7ruzi.cz/grosistudio", "_blank", "noopener,noreferrer,width=1200,height=800");
+        return;
+      }
+      otevri(polozka);
+    });
     ikony.append(tlacitko);
   });
 }

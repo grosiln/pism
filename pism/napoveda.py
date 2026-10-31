@@ -18,12 +18,15 @@ def texty():
             "nazev": "Disky",
             "odstavce": [
                 "Karty jsou pod sebou. Systémová karta, každý datový disk a zrcadlo mají každá vlastní kartu. Pod nimi je Přidat disk a BETA RAID.",
-                "Systémová karta je jen informace. Ukáže volné místo. Upravit u ní není, SMART nemá a sdílená složka na ni nejde. Kdo s ní chce něco dělat, udělá to sám přes SSH.",
+                "Systémová karta je jen informace. Ukáže volné místo. Odebrat ani Formát u ní není, SMART nemá a sdílená složka na ni nejde. Kdo s ní chce něco dělat, udělá to sám přes SSH.",
                 "Datový disk ukáže model, velikost a volné místo. Řádek obsazeno se neukazuje. Když je datových disků víc, každý má vlastní kartu.",
-                "Upravit u datového disku smaže jen ten disk a složky na něm. Ostatní disky a jejich složky zůstanou. Nejdřív se napíše SMAZAT. Systémová karta zůstane.",
-                "Přidat disk ukáže každý funkční disk na USB, který ještě není datový. U každého jde přidat jen sdílení, RAID se tím nezaloží. Po SMAZAT se smaže jen ten vybraný a stane se z něj datový disk. Ostatní disky zůstanou. Když žádný takový disk není, okno řekne, že disk k dispozici není.",
-                "Zrcadlo má vlastní kartu. Řekne, jestli je v pořádku a oba disky jedou, nebo že je oslabené, protože jeden disk chybí. Každý disk ze zrcadla je na vlastním řádku a má vlastní SMART. Připojit k tomu není potřeba. Když zrcadlo není připojené, složka na něj nejde. Připojit ho připojí vedle datového disku, po restartu tam zůstane a pak je vidět volné místo. Nic se nemaže a datový disk zůstane.",
-                "U datového disku je SMART vedle Upravit. U zrcadla ho má každý disk zvlášť. Stav je Výborný, Dobrý, nebo Špatný. Pod tím je teplota, jak dlouho disk běží a jestli má poškozená místa. Když to z disku nejde přečíst, okno to řekne a stav nevymyslí.",
+                "Odebrat disk vyřadí z PISM. Složky na něm ze seznamu zmizí. V okně je zaškrtnutí Smazat data na disku. Bez zaškrtnutí data na disku zůstanou a jiný Linux je přečte přímo. Se zaškrtnutím se data smažou. Věta v okně se podle zaškrtnutí změní. Potvrzení je ODEBRAT. Ostatní disky, zrcadlo a účty zůstanou. Disk s ponechanými daty se v Přidat disk neukáže a sám se do PISM nevrátí.",
+                "Formát je bokem, vedle Odebrat. Formát disk smaže a data nejdou vrátit. Disk v PISM zůstane, jen prázdný. Složky na něm ze seznamu zmizí. Potvrzení je SMAZAT.",
+                "Přidat disk ukáže každý funkční disk na USB, který ještě není datový a nemá ponechaná data. U každého jde přidat jen sdílení, RAID se tím nezaloží. Po SMAZAT se smaže jen ten vybraný a stane se z něj datový disk. Ostatní disky zůstanou. Když žádný takový disk není, okno řekne, že disk k dispozici není.",
+                "Zrcadlo má vlastní kartu. Řekne, jestli je v pořádku a oba disky jedou, nebo že je oslabené, protože jeden disk chybí. Každý disk ze zrcadla je na vlastním řádku a má vlastní SMART. Připojit k tomu není potřeba. Když zrcadlo není připojené, složka na něj nejde. Připojit ho připojí vedle datového disku, po restartu tam zůstane a pak je vidět volné místo. Samo Připojit nic nemaže a datový disk zůstane.",
+                "Odebrat zrcadlo ho vyřadí z PISM. Složky na něm ze seznamu zmizí a oba disky odejdou z konfigurace. Zaškrtnutí Smazat data na discích je stejné jako u disku. Bez zaškrtnutí data zůstanou. Jiný Linux je přečte, když zrcadlo znovu složí, a stačí i jeden disk. Se zaškrtnutím se data smažou. Potvrzení je ODEBRAT. PISM ho samo nevrátí a v Přidat disk ty disky nejsou.",
+                "Formát zrcadla je bokem, vedle Odebrat. Zrcadlo smaže a data nejdou vrátit. Zrcadlo v PISM zůstane, jen prázdné. Složky na něm ze seznamu zmizí. Potvrzení je SMAZAT.",
+                "U datového disku je SMART vedle Odebrat a Formát. U zrcadla ho má každý disk zvlášť. Stav je Výborný, Dobrý, nebo Špatný. Pod tím je teplota, jak dlouho disk běží a jestli má poškozená místa. Když to z disku nejde přečíst, okno to řekne a stav nevymyslí.",
             ],
         },
         {
@@ -34,7 +37,7 @@ def texty():
                 "Disk, který už má sdílení, vybrat jde. Před založením se zruší jeho složky a práva uživatelů k nim. Účty zůstanou. Teprve potom se oba disky smažou a založí se zrcadlo. Když se sdílení zrušit nepovede, pole se nezaloží a disky zůstanou.",
                 "Když se vyberou dva jiné disky a ten se sdílením se nebere, sdílení zůstane a zrcadlo bude v Diskách vedle něj. Když zrcadlo není připojené, v Diskách ho připojí tlačítko Připojit. Nic se při tom nemaže.",
                 "Zavřít bez napsání SMAZAT nic nesmaže. Když dva disky se stejnou kapacitou nejsou, okno jen řekne, co chybí, a založit nejde.",
-                "Zrcadlo je jen jedno. Když už je založené, další se nezaloží.",
+                "Zrcadlo je jen jedno. Když už je založené, další se nezaloží. Odebrání a formát zrcadla jsou na jeho kartě v Diskách, tady se jen zakládá.",
             ],
         },
         {
@@ -102,7 +105,7 @@ def texty():
                 "Když nějakou hodnotu změníš a dáš Zavřít, naskočí ukládání změn. Změna se uloží a předchozí stránka se znovu načte.",
                 "Když uložení trvá déle než odpočet, stránka počká, až opravdu skončí.",
                 "Když se uložení nepovede, zůstaneš v okně a uvidíš proč.",
-                "Smazání složky, smazání disku a přidání disku jsou změna. Zavřít u disku samo nic nesmaže. Smaže to až tlačítko po napsání SMAZAT.",
+                "Smazání složky, odebrání, formát a přidání disku jsou změna. Zavřít samo nic neprovede. Odebrání se potvrdí slovem ODEBRAT. Formát, přidání disku a založení zrcadla slovem SMAZAT.",
             ],
         },
         {
@@ -115,10 +118,18 @@ def texty():
             ],
         },
         {
+            "nazev": "GrosiStudio",
+            "odstavce": [
+                "Ikona je na ploše správce, za Nápovědou a před Darovat.",
+                "Kliknutí otevře v prohlížeči nové okno na https://7ruzi.cz/grosistudio. PISM zůstane otevřené.",
+                "Běžný účet ikonu nevidí.",
+            ],
+        },
+        {
             "nazev": "Darovat",
             "odstavce": [
                 "PISM jede naplno. Víc disků i zrcadlo jdou používat včetně zápisu. Nic se za dar nezamyká a nic se neodemkne.",
-                "Tlačítko Darovat je na ploše správce a je o něco větší. Otevře poděkování a PayPal grossmann@7ruzi.cz. Hodí se třeba 200 Kč, ale potěší i méně.",
+                "Tlačítko Darovat je na ploše správce a je o něco větší. Otevře poděkování a PayPal grossmann@7ruzi.cz. Mail je v okně tučně. Hodí se třeba 200 Kč, ale potěší i méně.",
                 "Stejné okno se při přihlášení správce otevře jen někdy, zhruba při každém čtvrtém. Když se ukázalo nedávno, další přihlášení ho přeskočí. Obnovení stránky ho znovu neotevře. Zavřít jen zavře.",
                 "Běžný účet tlačítko ani okno nevidí. V liště za PI4 je číslo verze a hned za ním bíle datum, kdy vyšla. Není tam verze ZDARMA ani verze PLNÁ.",
             ],
