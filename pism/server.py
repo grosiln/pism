@@ -23,6 +23,8 @@ DATA = ROOT / "data"
 USERS = DATA / "uzivatele.json"
 PORT = 80
 SPRAVCE = "admin"
+SMAZANI = ("SMAZAT", "DELETE")
+ODEBRANI = ("ODEBRAT", "REMOVE")
 MIN_HESLO = 4
 
 
@@ -139,6 +141,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/app.js":
             self._soubor("app.js")
+            return
+        if path == "/preklad.js":
+            self._soubor("preklad.js")
             return
         if path == "/grosistudio-logo.png":
             logo = (ROOT / "grosistudio-logo.png").resolve()
@@ -333,37 +338,37 @@ class Handler(BaseHTTPRequestHandler):
         ]}
 
     def _svazek(self, data):
-        if str(data.get("potvrzeni", "")) != "SMAZAT":
+        if str(data.get("potvrzeni", "")) not in SMAZANI:
             raise stroj.StrojChyba("Pro přidání disku napiš SMAZAT.")
         return stroj.vytvor_svazek(str(data.get("disk") or ""))
 
     def _smaz_disk(self, data):
-        if str(data.get("potvrzeni", "")) != "SMAZAT":
+        if str(data.get("potvrzeni", "")) not in SMAZANI:
             raise stroj.StrojChyba("Pro smazání disku napiš SMAZAT.")
         return stroj.smaz_disk(str(data.get("disk") or "hlavni"))
 
     def _odeber_disk(self, data):
-        if str(data.get("potvrzeni", "")) != "ODEBRAT":
+        if str(data.get("potvrzeni", "")) not in ODEBRANI:
             raise stroj.StrojChyba("Pro odebrání napiš ODEBRAT.")
         return stroj.odeber_disk(str(data.get("disk") or "hlavni"), data.get("smazat") is True)
 
     def _format_disk(self, data):
-        if str(data.get("potvrzeni", "")) != "SMAZAT":
+        if str(data.get("potvrzeni", "")) not in SMAZANI:
             raise stroj.StrojChyba("Pro formát napiš SMAZAT.")
         return stroj.formatuj_disk(str(data.get("disk") or "hlavni"))
 
     def _odeber_raid(self, data):
-        if str(data.get("potvrzeni", "")) != "ODEBRAT":
+        if str(data.get("potvrzeni", "")) not in ODEBRANI:
             raise stroj.StrojChyba("Pro odebrání napiš ODEBRAT.")
         return raid.odeber(data.get("smazat") is True)
 
     def _format_raid(self, data):
-        if str(data.get("potvrzeni", "")) != "SMAZAT":
+        if str(data.get("potvrzeni", "")) not in SMAZANI:
             raise stroj.StrojChyba("Pro formát napiš SMAZAT.")
         return raid.formatuj()
 
     def _raid(self, data):
-        if str(data.get("potvrzeni", "")) != "SMAZAT":
+        if str(data.get("potvrzeni", "")) not in SMAZANI:
             raise stroj.StrojChyba("Pro založení zrcadla napiš SMAZAT.")
         return raid.zaloz(data.get("disky"))
 

@@ -40,7 +40,7 @@ SOUBORY = (
     "pism-sit.service",
     "grosistudio-logo.png",
 )
-WEB = ("index.html", "app.js", "style.css")
+WEB = ("index.html", "app.js", "style.css", "preklad.js")
 _zamek = threading.Lock()
 
 

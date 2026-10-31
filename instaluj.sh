@@ -37,7 +37,7 @@ do
 done
 chmod 755 "$CIL/pism-sit"
 
-for soubor in index.html app.js style.css; do
+for soubor in index.html app.js style.css preklad.js; do
   install -m 644 "$ZDROJ/web/$soubor" "$CIL/web/$soubor"
 done
 

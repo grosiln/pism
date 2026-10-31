@@ -31,8 +31,21 @@ let poNavratu = null;
 let obnovitSekci = null;
 let opustitStranku = false;
 const PROC_CEKANI = "Změny se ukládají, aby byly potom vidět. Až odpočet skončí, stránka se znovu načte.";
+let jazyk = "cs";
+try {
+  if (localStorage.getItem("pism-jazyk") === "en") jazyk = "en";
+} catch (chyba) {
+  jazyk = "cs";
+}
+document.documentElement.lang = jazyk === "en" ? "en" : "cs";
+
+function t(text) {
+  if (typeof pismPreloz === "function") return pismPreloz(text, jazyk);
+  return text == null ? "" : String(text);
+}
 
 let prvni = false;
+let otevrenaPolozka = null;
 let sitZprava = "";
 let casZprava = "";
 let smartBeh = 0;
@@ -68,7 +81,8 @@ const panely = {
 function el(tag, attrs, deti) {
   const uzel = document.createElement(tag);
   Object.entries(attrs || {}).forEach(([klic, hodnota]) => {
-    if (klic === "text") uzel.textContent = hodnota;
+    if (klic === "text" || klic === "textContent") uzel.textContent = t(hodnota);
+    else if (klic === "placeholder") uzel.placeholder = t(hodnota);
     else if (klic === "class") uzel.className = hodnota;
     else uzel[klic] = hodnota;
   });
@@ -77,15 +91,15 @@ function el(tag, attrs, deti) {
 }
 
 function ukazHlaseni(text) {
-  hlaseni.textContent = text || "";
+  hlaseni.textContent = t(text || "");
 }
 
 function ukazOknoHlaseni(text) {
-  oknoHlaseni.textContent = text || "";
+  oknoHlaseni.textContent = t(text || "");
 }
 
 function ukazEditHlaseni(text) {
-  editHlaseni.textContent = text || "";
+  editHlaseni.textContent = t(text || "");
 }
 
 function zavriEdit() {
@@ -101,9 +115,9 @@ function zrusOdpocet() {
   behOdpocet += 1;
   cekaNaUlozeni = false;
   editZavrit.disabled = false;
-  editZavrit.textContent = "Zavřít";
+  editZavrit.textContent = t("Zavřít");
   oknoZavrit.disabled = false;
-  oknoZavrit.textContent = "Zavřít";
+  oknoZavrit.textContent = t("Zavřít");
 }
 
 function pripravUlozeni(funkce, zmena) {
@@ -141,7 +155,7 @@ async function odejitSUlozenim(nahrazeni) {
   let ulozeno = !ulozit;
   let selhani = null;
   function kresli() {
-    editZavrit.textContent = textOdpocet(zbyva);
+    editZavrit.textContent = t(textOdpocet(zbyva));
     ukazEditHlaseni(hlaskaOdpocet(zbyva));
   }
   kresli();
@@ -173,7 +187,7 @@ async function odejitSUlozenim(nahrazeni) {
   if (selhani) {
     cekaNaUlozeni = false;
     editZavrit.disabled = false;
-    editZavrit.textContent = "Zavřít";
+    editZavrit.textContent = t("Zavřít");
     zamcene.forEach(([uzel, byl]) => { uzel.disabled = byl; });
     ukazEditHlaseni(selhani.message || "Nepovedlo se.");
     return;
@@ -181,7 +195,7 @@ async function odejitSUlozenim(nahrazeni) {
   const navrat = poNavratu;
   cekaNaUlozeni = false;
   editZavrit.disabled = false;
-  editZavrit.textContent = "Zavřít";
+  editZavrit.textContent = t("Zavřít");
   zavriEdit();
   nactiPrehled();
   try {
@@ -211,7 +225,8 @@ function odejitZPrehledu() {
 
 function otevriEdit(nazev, obsah) {
   zastavMereni();
-  editNazev.textContent = nazev;
+  edit.dataset.nazev = nazev;
+  editNazev.textContent = t(nazev);
   ukazEditHlaseni("");
   editTelo.replaceChildren(obsah);
   edit.classList.remove("skryte");
@@ -243,15 +258,15 @@ function ukazVstup(jePrvni) {
   zavriEdit();
   zastavMereni();
   vstup.classList.remove("skryte");
-  nadpis.textContent = jePrvni ? "První spuštění" : "Přihlášení";
-  popis.textContent = jePrvni
+  nadpis.textContent = t(jePrvni ? "První spuštění" : "Přihlášení");
+  popis.textContent = t(jePrvni
     ? "Zvol heslo správce. Účet bude admin."
-    : "Napiš účet a heslo.";
+    : "Napiš účet a heslo.");
   ucetPole.classList.toggle("skryte", jePrvni);
   ucetVstup.required = !jePrvni;
   znovuPole.classList.toggle("skryte", !jePrvni);
   znovu.required = jePrvni;
-  odeslat.textContent = jePrvni ? "Založit" : "Vstoupit";
+  odeslat.textContent = t(jePrvni ? "Založit" : "Vstoupit");
   heslo.autocomplete = jePrvni ? "new-password" : "current-password";
   ukazHlaseni("");
   heslo.value = "";
@@ -320,12 +335,12 @@ function blokAdresy(nadpisText, rozhrani, sitData) {
     brana.disabled = !zapnuto;
     const nova = adresa.value.trim();
     if (zapnuto && rozhrani === "lan" && nova && nova !== (sitData.adresa || "")) {
-      upozorneni.textContent = "Po potvrzení se to uloží hned a zůstane i po restartu. PISM potom otevři na http://" + nova + ".";
+      upozorneni.textContent = t("Po potvrzení se to uloží hned a zůstane i po restartu. PISM potom otevři na http://" + nova + ".");
       return;
     }
-    upozorneni.textContent = zapnuto
+    upozorneni.textContent = t(zapnuto
       ? "Po potvrzení se pevná adresa uloží hned a zůstane i po restartu."
-      : "Po potvrzení adresu zase dává router. Řádky zůstanou vidět a uložení zůstane i po restartu.";
+      : "Po potvrzení adresu zase dává router. Řádky zůstanou vidět a uložení zůstane i po restartu.");
   }
   auto.addEventListener("change", prekresli);
   rucne.addEventListener("change", prekresli);
@@ -452,7 +467,7 @@ function otevriWifiPripojeni() {
   hledat.addEventListener("click", async () => {
     ukazEditHlaseni("");
     hledat.disabled = true;
-    hledat.textContent = "Hledám sítě…";
+    hledat.textContent = t("Hledám sítě…");
     seznam.replaceChildren();
     try {
       const site = await api("/api/wifi");
@@ -470,7 +485,7 @@ function otevriWifiPripojeni() {
       ukazEditHlaseni(chyba.message);
     }
     hledat.disabled = false;
-    hledat.textContent = "Najít sítě";
+    hledat.textContent = t("Najít sítě");
   });
   pripoj.addEventListener("click", () => odejitSUlozenim());
   otevriEdit("Připojit Wi-Fi", el("div", {}, [
@@ -590,7 +605,7 @@ async function otevriPridatDisk() {
     const potvrzeni = el("input", { type: "text", placeholder: "SMAZAT", autocomplete: "off" });
     const ulozit = el("button", { type: "button", className: "nebezpeci", textContent: "Potvrdit a přidat" });
     ulozit.addEventListener("click", () => odejitSUlozenim(async () => {
-      if (potvrzeni.value !== "SMAZAT") throw new Error("Pro přidání disku napiš SMAZAT.");
+      if (potvrzeni.value !== t("SMAZAT")) throw new Error("Pro přidání disku napiš SMAZAT.");
       await api("/api/disky/svazek", { potvrzeni: potvrzeni.value, disk: disk.jmeno });
     }));
     deti.push(
@@ -617,7 +632,7 @@ async function otevriSmart(klic) {
   pripravUlozeni(null);
   try {
     const data = await api(klic ? "/api/disky/smart?disk=" + encodeURIComponent(klic) : "/api/disky/smart");
-    if (beh !== smartBeh || edit.classList.contains("skryte") || editNazev.textContent !== "SMART") return;
+    if (beh !== smartBeh || edit.classList.contains("skryte") || edit.dataset.nazev !== "SMART") return;
     const deti = [];
     if (data.lze && data.stav_text) deti.push(el("h3", { text: data.stav_text }));
     deti.push(el("p", { class: "poznamka", text: data.veta || "Z tohoto disku SMART nejde přečíst." }));
@@ -637,7 +652,7 @@ function otevriPotvrzeni(nazev, vety, slovo, tlacitkoNazev, potvrdit) {
   const potvrzeni = el("input", { type: "text", placeholder: slovo, autocomplete: "off" });
   const tlacitko = el("button", { type: "button", className: "nebezpeci", textContent: tlacitkoNazev });
   tlacitko.addEventListener("click", () => odejitSUlozenim(async () => {
-    if (potvrzeni.value !== slovo) throw new Error("Pro potvrzení napiš " + slovo + ".");
+    if (potvrzeni.value !== t(slovo)) throw new Error("Pro potvrzení napiš " + slovo + ".");
     await potvrdit(potvrzeni.value);
   }));
   otevriEdit(nazev, el("div", {}, [
@@ -652,12 +667,12 @@ function otevriOdebrani(nazev, uvod, bez, se, zaskrtnuti, potvrdit) {
   const zaskrt = el("input", { type: "checkbox" });
   const veta = el("p", { class: "poznamka", text: bez });
   zaskrt.addEventListener("change", () => {
-    veta.textContent = zaskrt.checked ? se : bez;
+    veta.textContent = t(zaskrt.checked ? se : bez);
   });
   const potvrzeni = el("input", { type: "text", placeholder: "ODEBRAT", autocomplete: "off" });
   const tlacitko = el("button", { type: "button", className: "nebezpeci", textContent: "Odebrat" });
   tlacitko.addEventListener("click", () => odejitSUlozenim(async () => {
-    if (potvrzeni.value !== "ODEBRAT") throw new Error("Pro odebrání napiš ODEBRAT.");
+    if (potvrzeni.value !== t("ODEBRAT")) throw new Error("Pro odebrání napiš ODEBRAT.");
     await potvrdit(zaskrt.checked, potvrzeni.value);
   }));
   otevriEdit(nazev, el("div", {}, [
@@ -716,7 +731,7 @@ function otevriKonfiguraciRaidu() {
   otevriEdit("Konfigurace soft RAID", el("p", { class: "poznamka", text: "Načítám…" }));
   pripravUlozeni(null);
   api("/api/disky/raid/konfigurace").then((data) => {
-    if (edit.classList.contains("skryte") || editNazev.textContent !== "Konfigurace soft RAID") return;
+    if (edit.classList.contains("skryte") || edit.dataset.nazev !== "Konfigurace soft RAID") return;
     const deti = (data.vety || []).map((veta) => el("p", { class: "poznamka", text: veta }));
     const boxy = [];
     const vyber = el("div");
@@ -733,11 +748,11 @@ function otevriKonfiguraciRaidu() {
         const bere = oznacene.some((polozka) => polozka.sdileni);
         if (bere) {
           const nazvy = (data.slozky || []).join(", ");
-          doplnek.textContent = nazvy
+          doplnek.textContent = t(nazvy
             ? "Zruší se složky: " + nazvy + ". Práva uživatelů k nim zmizí. Účty zůstanou. Data na obou discích se smažou."
-            : "Sdílení na vybraném disku se zruší. Účty zůstanou. Data na obou discích se smažou.";
+            : "Sdílení na vybraném disku se zruší. Účty zůstanou. Data na obou discích se smažou.");
         } else if (oznacene.length) {
-          doplnek.textContent = "Stávající sdílení zůstane. Data na vybraných discích se smažou.";
+          doplnek.textContent = t("Stávající sdílení zůstane. Data na vybraných discích se smažou.");
         } else {
           doplnek.textContent = "";
         }
@@ -753,6 +768,7 @@ function otevriKonfiguraciRaidu() {
         if (oznacene.length !== 2 || !oznacene[0].klic || oznacene[0].klic !== oznacene[1].klic) {
           throw new Error("Vyber dva disky se stejnou kapacitou.");
         }
+        if (potvrzeni.value !== t("SMAZAT")) throw new Error("Pro založení zrcadla napiš SMAZAT.");
         await api("/api/disky/raid/zalozit", {
           potvrzeni: potvrzeni.value,
           disky: oznacene.map((disk) => disk.jmeno)
@@ -772,7 +788,7 @@ async function otevriBetaRaid() {
   pripravUlozeni(null);
   try {
     const data = await api("/api/disky/raid");
-    if (edit.classList.contains("skryte") || editNazev.textContent !== "BETA RAID USB") return;
+    if (edit.classList.contains("skryte") || edit.dataset.nazev !== "BETA RAID USB") return;
     const beru = el("button", { type: "button", className: "male", textContent: data.beru });
     beru.addEventListener("click", () => otevriKonfiguraciRaidu());
     editTelo.replaceChildren(el("div", {}, [
@@ -974,11 +990,11 @@ function souhrnPrav(prava, ucty) {
     const slozka = pravoKanalu(hodnota, "slozka");
     const ftp = pravoKanalu(hodnota, "ftp");
     const kusy = [];
-    if (slozka !== "nic") kusy.push("složka " + textPrava(slozka));
-    if (ftp !== "nic") kusy.push("FTP " + textPrava(ftp));
+    if (slozka !== "nic") kusy.push(t("složka") + " " + t(textPrava(slozka)));
+    if (ftp !== "nic") kusy.push("FTP " + t(textPrava(ftp)));
     if (kusy.length) casti.push(ucet.ucet + " " + kusy.join(", "));
   });
-  return casti.join("; ") || "nikdo";
+  return casti.join("; ") || t("nikdo");
 }
 
 function otevriNovouSlozku(disky) {
@@ -1205,7 +1221,7 @@ async function nactiCas() {
 function odstavecSMailem(text) {
   const mail = "grossmann@7ruzi.cz";
   const odstavec = el("p", { class: "poznamka" });
-  String(text).split(mail).forEach((kus, poradi, kusy) => {
+  String(t(text)).split(mail).forEach((kus, poradi, kusy) => {
     if (kus) odstavec.append(document.createTextNode(kus));
     if (poradi < kusy.length - 1) {
       const tucne = document.createElement("strong");
@@ -1289,7 +1305,7 @@ async function nactiSystem() {
 function nactiNapovedu() {
   oknoTelo.replaceChildren(el("p", { class: "poznamka na-sirku", text: "Načítám…" }));
   api("/api/napoveda").then((data) => {
-    if (okno.classList.contains("skryte") || oknoNazev.textContent !== "Nápověda") return;
+    if (okno.classList.contains("skryte") || okno.dataset.nazev !== "Nápověda") return;
     const casti = data.casti || [];
     const seznam = el("div", { class: "napoveda-seznam" });
     const vypis = el("div", { class: "napoveda-vypis" });
@@ -1369,8 +1385,10 @@ async function otevri(polozka) {
   zastavMereni();
   pripravUlozeni(null);
   zavriEdit();
+  otevrenaPolozka = polozka;
   obnovitSekci = panely[polozka.id] || nactiSystem;
-  oknoNazev.textContent = polozka.nazev;
+  okno.dataset.nazev = polozka.nazev;
+  oknoNazev.textContent = t(polozka.nazev);
   ukazOknoHlaseni("");
   oknoTelo.replaceChildren(el("p", { class: "poznamka na-sirku", text: "Načítám…" }));
   okno.classList.remove("skryte");
@@ -1440,8 +1458,8 @@ function spustMereni() {
       if (!plochaJeVolna()) return;
       const prenos = document.querySelector("#prehled-prenos");
       const teplota = document.querySelector("#prehled-teplota");
-      if (prenos) prenos.textContent = textPrenosu(data);
-      if (teplota) teplota.textContent = textTeploty(data);
+      if (prenos) prenos.textContent = t(textPrenosu(data));
+      if (teplota) teplota.textContent = t(textTeploty(data));
     }).catch(() => {}).finally(() => {
       prehledMereniBezi = false;
     });
@@ -1452,7 +1470,7 @@ async function nactiPrehled() {
   const box = document.querySelector("#prehled");
   if (!box) return;
   const beh = ++prehledBeh;
-  if (!box.childElementCount) box.textContent = "Načítám…";
+  if (!box.childElementCount) box.textContent = t("Načítám…");
   try {
     const data = await api("/api/prehled");
     if (beh !== prehledBeh || plocha.classList.contains("skryte")) return;
@@ -1477,14 +1495,14 @@ async function nactiPrehled() {
     spustMereni();
   } catch (chyba) {
     if (beh !== prehledBeh) return;
-    box.textContent = chyba.message || "Přehled teď nejde načíst.";
+    box.textContent = t(chyba.message || "Přehled teď nejde načíst.");
   }
 }
 
 function ukazPlochu(ucet, polozky, spravce, verze, vystaveno) {
   vstup.classList.add("skryte");
   plocha.classList.remove("skryte");
-  document.querySelector("#verze").textContent = verze ? "verze " + verze : "";
+  document.querySelector("#verze").textContent = verze ? t("verze " + verze) : "";
   document.querySelector("#vystaveno").textContent = vystaveno || "";
   kdo.textContent = ucet;
   bezSpravy.classList.toggle("skryte", !!spravce);
@@ -1503,7 +1521,7 @@ function ukazPlochu(ucet, polozky, spravce, verze, vystaveno) {
     tvar.innerHTML = tvary[polozka.id] || "";
     const nazev = document.createElement("span");
     nazev.className = "ikona-nazev";
-    nazev.textContent = polozka.nazev;
+    nazev.textContent = t(polozka.nazev);
     tlacitko.append(tvar, nazev);
     tlacitko.addEventListener("click", () => {
       if (polozka.id === "studio") {
@@ -1580,19 +1598,111 @@ formular.addEventListener("submit", async (udalost) => {
   if (data.dar) otevri({ id: "dar", nazev: "Děkuji" });
 });
 
+function zavriNabidkuJazyka() {
+  document.querySelectorAll(".jazyk-menu").forEach((menu) => menu.classList.add("skryte"));
+  document.querySelectorAll(".jazyk-tlacitko").forEach((tlacitko) => {
+    tlacitko.classList.remove("otevrene");
+    tlacitko.setAttribute("aria-expanded", "false");
+  });
+}
+
+function prelozPevne() {
+  document.querySelectorAll("[data-cs]").forEach((uzel) => {
+    uzel.textContent = t(uzel.getAttribute("data-cs"));
+  });
+  const napajeniTlacitko = document.querySelector("#napajeni");
+  if (napajeniTlacitko) napajeniTlacitko.setAttribute("aria-label", t("Napájení"));
+  const prehledBox = document.querySelector("#prehled");
+  if (prehledBox) prehledBox.setAttribute("aria-label", t("Přehled"));
+}
+
+function nakresliJazyk() {
+  const text = jazyk === "en" ? "language: English" : "jazyk: čeština";
+  const druha = jazyk === "en" ? { kod: "cs", text: "čeština" } : { kod: "en", text: "English" };
+  document.querySelectorAll(".jazyk-tlacitko").forEach((tlacitko) => {
+    const sipka = document.createElement("span");
+    sipka.className = "jazyk-sipka";
+    sipka.setAttribute("aria-hidden", "true");
+    tlacitko.replaceChildren(document.createTextNode(text), sipka);
+  });
+  document.querySelectorAll(".jazyk-menu").forEach((menu) => {
+    menu.replaceChildren();
+    const volba = document.createElement("button");
+    volba.type = "button";
+    volba.textContent = druha.text;
+    volba.addEventListener("click", (udalost) => {
+      udalost.stopPropagation();
+      pouzijJazyk(druha.kod);
+    });
+    menu.append(volba);
+  });
+}
+
+function pouzijJazyk(kod) {
+  if (cekaNaUlozeni) return;
+  if (kod !== "cs" && kod !== "en") return;
+  zavriNabidkuJazyka();
+  if (kod === jazyk) return;
+  jazyk = kod;
+  try {
+    localStorage.setItem("pism-jazyk", jazyk);
+  } catch (chyba) {
+    /* Volba platí aspoň do zavření stránky. */
+  }
+  document.documentElement.lang = jazyk === "en" ? "en" : "cs";
+  nakresliJazyk();
+  prelozPevne();
+  if (!vstup.classList.contains("skryte")) {
+    nadpis.textContent = t(prvni ? "První spuštění" : "Přihlášení");
+    popis.textContent = t(prvni ? "Zvol heslo správce. Účet bude admin." : "Napiš účet a heslo.");
+    odeslat.textContent = t(prvni ? "Založit" : "Vstoupit");
+    ukazHlaseni("");
+    return;
+  }
+  const polozka = !okno.classList.contains("skryte") ? otevrenaPolozka : null;
+  zavriEdit();
+  nacti().then(() => {
+    if (polozka) otevri(polozka);
+  });
+}
+
+function pripravJazyk() {
+  document.querySelectorAll(".jazyk-tlacitko").forEach((tlacitko) => {
+    tlacitko.setAttribute("aria-haspopup", "menu");
+    tlacitko.setAttribute("aria-expanded", "false");
+    tlacitko.addEventListener("click", (udalost) => {
+      udalost.stopPropagation();
+      const menu = tlacitko.parentElement.querySelector(".jazyk-menu");
+      const bylo = menu.classList.contains("skryte");
+      zavriNabidkuJazyka();
+      document.querySelector("#napajeni-menu").classList.add("skryte");
+      if (bylo) {
+        menu.classList.remove("skryte");
+        tlacitko.classList.add("otevrene");
+        tlacitko.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
+  nakresliJazyk();
+  prelozPevne();
+}
+
 document.querySelector("#odhlasit").addEventListener("click", async () => {
   document.querySelector("#napajeni-menu").classList.add("skryte");
+  zavriNabidkuJazyka();
   await fetch("/api/odhlaseni", { method: "POST" });
   await nacti();
 });
 
 document.querySelector("#napajeni").addEventListener("click", (udalost) => {
   udalost.stopPropagation();
+  zavriNabidkuJazyka();
   document.querySelector("#napajeni-menu").classList.toggle("skryte");
 });
 
 document.addEventListener("click", () => {
   document.querySelector("#napajeni-menu").classList.add("skryte");
+  zavriNabidkuJazyka();
 });
 
 function otevriNapajeni(restart) {
@@ -1645,6 +1755,10 @@ editZavrit.addEventListener("click", () => {
 
 document.addEventListener("keydown", (udalost) => {
   if (udalost.key !== "Escape" || cekaNaUlozeni) return;
+  if (document.querySelector(".jazyk-menu:not(.skryte)")) {
+    zavriNabidkuJazyka();
+    return;
+  }
   const menu = document.querySelector("#napajeni-menu");
   if (!menu.classList.contains("skryte") && edit.classList.contains("skryte") && okno.classList.contains("skryte")) {
     menu.classList.add("skryte");
@@ -1654,4 +1768,5 @@ document.addEventListener("keydown", (udalost) => {
   else if (!okno.classList.contains("skryte")) odejitZPrehledu();
 });
 
+pripravJazyk();
 nacti();

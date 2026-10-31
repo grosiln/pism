@@ -169,6 +169,83 @@ button[type="submit"]:hover, #zavrit:hover { background: var(--akcent-svetly); }
   gap: 12px;
 }
 
+.jazyk { position: relative; }
+
+.jazyk-tlacitko {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #c9c1b4;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--inkoust);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.jazyk-tlacitko:hover,
+.jazyk-tlacitko:focus-visible {
+  border-color: var(--akcent);
+  color: var(--akcent);
+}
+
+.jazyk-sipka {
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.jazyk-tlacitko.otevrene .jazyk-sipka { transform: rotate(225deg) translateY(-1px); }
+
+#jazyk-vstup { margin: 0 0 14px; }
+
+#jazyk-lista .jazyk-tlacitko {
+  padding: 6px 12px;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#jazyk-lista .jazyk-tlacitko:hover,
+#jazyk-lista .jazyk-tlacitko:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border-color: #fff;
+}
+
+.jazyk-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 3;
+  min-width: 148px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--karta);
+  color: var(--inkoust);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.jazyk-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.jazyk-menu button:hover { background: #efeae1; }
+
 .napajeni { position: relative; }
 
 #napajeni {
