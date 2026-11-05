@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """PISM: síť."""
 
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -55,6 +56,8 @@ def _nmcli_bezpecne(zarizeni):
 
 
 def _aktivni_pripojeni(zarizeni):
+    if not zarizeni:
+        return ""
     try:
         text = _beh(["nmcli", "-t", "-f", "NAME,DEVICE", "connection", "show", "--active"]).stdout
     except StrojChyba:
@@ -118,9 +121,60 @@ def _popis_adresy(zarizeni, data):
 PAMET_WIFI = Path("/var/lib/pism/wifi-pripojeni")
 
 
+def _sitova_jmena():
+    koren = Path("/sys/class/net")
+    lan = []
+    wifi = []
+    if not koren.is_dir():
+        return lan, wifi
+    for polozka in sorted(koren.iterdir()):
+        jmeno = polozka.name
+        if jmeno == "lo" or jmeno.startswith(("veth", "docker", "br-", "virbr", "tun", "tap", "wg", "vnet")):
+            continue
+        if not re_jmeno(jmeno):
+            continue
+        if (polozka / "wireless").exists() or (polozka / "phy80211").exists():
+            wifi.append(jmeno)
+            continue
+        try:
+            if (polozka / "type").read_text(encoding="ascii").strip() == "1":
+                lan.append(jmeno)
+        except OSError:
+            continue
+    return lan, wifi
+
+
+def re_jmeno(jmeno):
+    return bool(re.fullmatch(r"[A-Za-z0-9_.:-]{1,32}", jmeno or ""))
+
+
+def _prvni_zive(seznam, soubor, hodnota):
+    for jmeno in seznam:
+        try:
+            text = Path(f"/sys/class/net/{jmeno}/{soubor}").read_text(encoding="ascii").strip()
+        except OSError:
+            continue
+        if text == hodnota:
+            return jmeno
+    return seznam[0] if seznam else ""
+
+
+def lan_rozhrani():
+    lan, _wifi = _sitova_jmena()
+    return _prvni_zive(lan, "carrier", "1")
+
+
+def wifi_rozhrani():
+    _lan, wifi = _sitova_jmena()
+    return _prvni_zive(wifi, "operstate", "up")
+
+
 def _kabel_zapojen():
+    zarizeni = lan_rozhrani()
+    if not zarizeni:
+        return False
     try:
-        return Path("/sys/class/net/eth0/carrier").read_text(encoding="ascii").strip() == "1"
+        return Path(f"/sys/class/net/{zarizeni}/carrier").read_text(encoding="ascii").strip() == "1"
     except OSError:
         return False
 
@@ -129,7 +183,9 @@ def _vychozi_rozhrani():
     if _kabel_zapojen():
         return "lan"
     nalezene = []
-    for rozhrani, zarizeni in (("lan", "eth0"), ("wifi", "wlan0")):
+    for rozhrani, zarizeni in (("lan", lan_rozhrani()), ("wifi", wifi_rozhrani())):
+        if not zarizeni:
+            continue
         nazev = _aktivni_pripojeni(zarizeni)
         if not nazev:
             continue
@@ -143,7 +199,7 @@ def _vychozi_rozhrani():
     if nalezene:
         nalezene.sort()
         return nalezene[0][1]
-    if _aktivni_pripojeni("eth0"):
+    if _aktivni_pripojeni(lan_rozhrani()):
         return "lan"
     return "wifi"
 
@@ -179,7 +235,7 @@ def _wifi_profily():
 
 
 def _zapamatuj_wifi():
-    nazev = _aktivni_pripojeni("wlan0")
+    nazev = _aktivni_pripojeni(wifi_rozhrani())
     if not nazev:
         return
     PAMET_WIFI.parent.mkdir(parents=True, exist_ok=True)
@@ -215,9 +271,11 @@ def _ssid_profilu(nazev):
 
 
 def sit():
-    lan = _popis_adresy("eth0", _nmcli_bezpecne("eth0"))
-    wifi_raw = _nmcli_bezpecne("wlan0")
-    wifi = _popis_adresy("wlan0", wifi_raw)
+    lan_jmeno = lan_rozhrani()
+    wifi_jmeno = wifi_rozhrani()
+    lan = _popis_adresy(lan_jmeno, _nmcli_bezpecne(lan_jmeno) if lan_jmeno else {})
+    wifi_raw = _nmcli_bezpecne(wifi_jmeno) if wifi_jmeno else {}
+    wifi = _popis_adresy(wifi_jmeno, wifi_raw)
     wifi["sit"] = _prvni(wifi_raw, "GENERAL.CONNECTION") or _ssid_profilu(_vybrana_wifi())
     kabel = _kabel_zapojen()
     wifi["potlacena"] = kabel and bool(wifi["sit"])
@@ -350,7 +408,7 @@ def nastav_adresu(rozhrani, rezim, adresa="", maska="", brana="", dns="", dns2="
     rozhrani = str(rozhrani or "").strip()
     if rozhrani not in {"lan", "wifi"}:
         raise StrojChyba("Vyber kabel, nebo Wi-Fi.")
-    zarizeni = "eth0" if rozhrani == "lan" else "wlan0"
+    zarizeni = lan_rozhrani() if rozhrani == "lan" else wifi_rozhrani()
     nazev = _aktivni_pripojeni(zarizeni)
     if not nazev:
         if rozhrani == "wifi":
@@ -414,13 +472,13 @@ def nastav_obecne(vychozi, dns="", dns2=""):
     if vychozi not in {"lan", "wifi"}:
         raise StrojChyba("Vyber, kudy se chodí ven.")
     dns_seznam = _dns_polozky(dns, dns2)
-    zarizeni = {"lan": "eth0", "wifi": "wlan0"}
-    if not _aktivni_pripojeni(zarizeni[vychozi]):
+    zarizeni = {"lan": lan_rozhrani(), "wifi": wifi_rozhrani()}
+    if not zarizeni.get(vychozi) or not _aktivni_pripojeni(zarizeni[vychozi]):
         raise StrojChyba("To připojení teď není zapojené.")
     if not _prvni(_nmcli_bezpecne(zarizeni[vychozi]), "IP4.GATEWAY"):
         raise StrojChyba("Na tom připojení není brána.")
     cile = []
-    for rozhrani, jmeno_zarizeni in (("lan", "eth0"), ("wifi", "wlan0")):
+    for rozhrani, jmeno_zarizeni in (("lan", lan_rozhrani()), ("wifi", wifi_rozhrani())):
         if _kabel_zapojen() and rozhrani == "wifi":
             continue
         nazev = _aktivni_pripojeni(jmeno_zarizeni)
@@ -494,8 +552,9 @@ def srovnej_sit():
                     _zapis_pripojeni(nazev, [("connection.autoconnect", "no")])
                 except StrojChyba:
                     pass
-            if _aktivni_pripojeni("wlan0"):
-                subprocess.run(["nmcli", "device", "disconnect", "wlan0"], capture_output=True)
+            wifi = wifi_rozhrani()
+            if wifi and _aktivni_pripojeni(wifi):
+                subprocess.run(["nmcli", "device", "disconnect", wifi], capture_output=True)
             Path("/run/pism-sit").write_text("kabel\n", encoding="utf-8")
             return
         if not vybrana:
@@ -504,8 +563,9 @@ def srovnej_sit():
         try:
             _zapis_pripojeni(vybrana, [("connection.autoconnect", "yes")])
             _beh(["nmcli", "radio", "wifi", "on"])
-            if _aktivni_pripojeni("wlan0") != vybrana:
-                _aktivuj_pripojeni(vybrana, "wlan0")
+            wifi = wifi_rozhrani()
+            if wifi and _aktivni_pripojeni(wifi) != vybrana:
+                _aktivuj_pripojeni(vybrana, wifi)
         except StrojChyba:
             Path("/run/pism-sit").write_text("wifi-ceka\n", encoding="utf-8")
             return

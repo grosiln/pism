@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 pism.md
 pism/licence_klic.py
+pism-x86-64/licence_klic.py
 proti_kod.py
 proti_kod.bat
 spustit.bat

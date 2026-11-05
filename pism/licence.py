@@ -49,13 +49,11 @@ def _serial():
 def _usb():
     nalezene = []
     for disk in stroj._blokova():
-        if disk.get("type") != "disk" or disk.get("tran") != "usb":
+        if not stroj._je_jmeno_disku(str(disk.get("name") or "")):
             continue
         if stroj._je_system(disk):
             continue
         jmeno = str(disk.get("name") or "")
-        if jmeno.startswith(("mmc", "loop", "zram", "md")):
-            continue
         nalezene.append(jmeno)
     return nalezene
 
@@ -251,7 +249,7 @@ def _vety(stav, dni):
             "Licence na víc disků stojí 200 Kč. Pošli je na PayPal grossmann@7ruzi.cz a do zprávy u platby vlož kód tohoto PI4. Přijde proti kód.",
         ]
     return [
-        "Jeden datový disk je zdarma. Systémová karta se nepočítá.",
+        "Jeden datový disk je zdarma. Systémový disk se nepočítá.",
         "Druhý disk a zrcadlo jdou 30 dní zkoušet. Potom z nich jde jen číst, soubory se dají zkopírovat a zápis se vypne.",
         "Licence na víc disků stojí 200 Kč. Pošli je na PayPal grossmann@7ruzi.cz a do zprávy u platby vlož kód tohoto PI4. Přijde proti kód. Platí jen pro tohle PI4.",
     ]

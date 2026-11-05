@@ -6,6 +6,7 @@ import hmac
 import json
 import secrets
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -19,7 +20,7 @@ import aktualizace
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
-DATA = ROOT / "data"
+DATA = stroj.DATA
 USERS = DATA / "uzivatele.json"
 PORT = 80
 SPRAVCE = "admin"
@@ -55,12 +56,51 @@ PLOCHA = [
 
 _lock = threading.Lock()
 _sessions = {}
+_neuspechy = {}
+RELACE = 12 * 3600
 
 
 def _hash_heslo(heslo, sul):
+    return hashlib.scrypt(
+        heslo.encode("utf-8"), salt=sul.encode("utf-8"), n=2**14, r=8, p=1, dklen=32
+    ).hex()
+
+
+def _stare_heslo(heslo, sul):
     return hashlib.pbkdf2_hmac(
         "sha256", heslo.encode("utf-8"), sul.encode("utf-8"), 120000
     ).hex()
+
+
+def _uloz_relaci(token, ucet):
+    _sessions[token] = {"ucet": ucet, "do": time.time() + RELACE}
+
+
+def _jmeno_relace(token):
+    zaznam = _sessions.get(token)
+    if isinstance(zaznam, str):
+        return zaznam
+    if not isinstance(zaznam, dict):
+        return ""
+    if float(zaznam.get("do") or 0) < time.time():
+        _sessions.pop(token, None)
+        return ""
+    return str(zaznam.get("ucet") or "")
+
+
+def _prihlaseni_ceka(ip):
+    zaznam = _neuspechy.get(ip) or [0, 0]
+    if zaznam[0] >= 8 and zaznam[1] > time.time():
+        return True
+    if zaznam[1] and zaznam[1] <= time.time():
+        _neuspechy.pop(ip, None)
+    return False
+
+
+def _spocitej_neuspech(ip):
+    pocet, _dokdy = _neuspechy.get(ip) or [0, 0]
+    pocet += 1
+    _neuspechy[ip] = [pocet, time.time() + 60]
 
 
 def _nacti_uzivatele():
@@ -129,7 +169,7 @@ class Handler(BaseHTTPRequestHandler):
     def _ucet(self):
         token = _token_z_cookie(self.headers.get("Cookie"))
         with _lock:
-            return _sessions.get(token)
+            return _jmeno_relace(token)
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
@@ -174,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {
                 "ok": True, "prvni": prvni, "prihlasen": bool(ucet),
                 "ucet": ucet or "", "spravce": spravce, "verze": stroj.VERZE,
-                "vystaveno": stroj.VYSTAVENO,
+                "vystaveno": stroj.VYSTAVENO, "znacka": stroj.znacka_stroje(),
             })
             return
         if path == "/api/prehled":
@@ -477,7 +517,7 @@ class Handler(BaseHTTPRequestHandler):
                 }
             })
             token = secrets.token_urlsafe(32)
-            _sessions[token] = SPRAVCE
+            _uloz_relaci(token, SPRAVCE)
         try:
             stroj.zajisti_ucet(SPRAVCE, heslo)
         except stroj.StrojChyba:
@@ -485,23 +525,36 @@ class Handler(BaseHTTPRequestHandler):
         self._json(
             200,
             {"ok": True, "ucet": SPRAVCE, "dar": _dar_pri_vstupu(SPRAVCE)},
-            f"pism={token}; Path=/; HttpOnly; SameSite=Lax",
+            f"pism={token}; Path=/; Max-Age={RELACE}; HttpOnly; SameSite=Lax",
         )
 
     def _prihlaseni(self, data):
         ucet = str(data.get("ucet", "")).strip().lower()
         heslo = str(data.get("heslo", ""))
+        ip = self.client_address[0] if self.client_address else ""
         self._normalizuj_ucty()
         with _lock:
+            if _prihlaseni_ceka(ip):
+                self._json(429, {"ok": False, "hlaseni": "Příliš mnoho pokusů. Zkus to za chvíli."})
+                return
             users = _nacti_uzivatele()
             zaznam = users.get(ucet)
-            if not zaznam:
-                platne = False
-            else:
-                platne = hmac.compare_digest(zaznam["heslo"], _hash_heslo(heslo, zaznam["sul"]))
+            platne = False
+            if zaznam and zaznam.get("sul") and zaznam.get("heslo"):
+                nove = _hash_heslo(heslo, zaznam["sul"])
+                if hmac.compare_digest(zaznam["heslo"], nove):
+                    platne = True
+                elif hmac.compare_digest(zaznam["heslo"], _stare_heslo(heslo, zaznam["sul"])):
+                    platne = True
+                    zaznam["heslo"] = nove
+                    users[ucet] = zaznam
+                    _uloz_uzivatele(users)
             token = secrets.token_urlsafe(32) if platne else ""
             if platne:
-                _sessions[token] = ucet
+                _neuspechy.pop(ip, None)
+                _uloz_relaci(token, ucet)
+            else:
+                _spocitej_neuspech(ip)
         if not platne:
             self._json(401, {"ok": False, "hlaseni": "Účet nebo heslo nesedí."})
             return
@@ -512,7 +565,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(
             200,
             {"ok": True, "ucet": ucet, "dar": _dar_pri_vstupu(ucet)},
-            f"pism={token}; Path=/; HttpOnly; SameSite=Lax",
+            f"pism={token}; Path=/; Max-Age={RELACE}; HttpOnly; SameSite=Lax",
         )
 
 

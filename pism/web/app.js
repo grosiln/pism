@@ -489,7 +489,7 @@ function otevriWifiPripojeni() {
   });
   pripoj.addEventListener("click", () => odejitSUlozenim());
   otevriEdit("Připojit Wi-Fi", el("div", {}, [
-    el("p", { class: "poznamka", text: "Síť se uloží do PI4. Dokud je kabel zapojený, Wi-Fi zůstane potlačená." }),
+    el("p", { class: "poznamka", text: "Síť se uloží do zařízení. Dokud je kabel zapojený, Wi-Fi zůstane potlačená." }),
     radekFormulare([ssid, hesloSite, pripoj]),
     hledat,
     seznam
@@ -497,7 +497,7 @@ function otevriWifiPripojeni() {
   pripravUlozeni(async () => {
     const vysledek = await api("/api/sit/wifi", { ssid: ssid.value, heslo: hesloSite.value });
     sitZprava = vysledek.wifi && vysledek.wifi.potlacena
-      ? "Síť je uložená. Dokud je kabel zapojený, Wi-Fi zůstane potlačená. Až kabel nebude, přihlásí se sama."
+      ? "Síť je uložená do zařízení. Dokud je kabel zapojený, Wi-Fi zůstane potlačená. Až kabel nebude, přihlásí se sama."
       : "Wi-Fi je připojená. Po restartu bez kabelu se přihlásí sama.";
   }, () => ssid.value.trim() !== "" || hesloSite.value !== "");
 }
@@ -528,8 +528,13 @@ async function nactiSit() {
 }
 
 function textDisku(disk) {
-  if (disk.systemovy) return disk.volno ? "volno " + disk.volno : "—";
-  const casti = [disk.model, disk.velikost].filter(Boolean);
+  if (disk.systemovy) {
+    const casti = [];
+    if (disk.pripojeni) casti.push(disk.pripojeni);
+    if (disk.volno) casti.push("volno " + disk.volno);
+    return casti.join(" · ") || "—";
+  }
+  const casti = [disk.model, disk.velikost, disk.pripojeni].filter(Boolean);
   if (disk.volno) casti.push("volno " + disk.volno);
   else if (disk.poznamka) casti.push(disk.poznamka);
   return casti.join(" · ");
@@ -540,7 +545,7 @@ function popisMista(disk) {
   if (disk.klic === "zrcadlo" || (disk.cleny && disk.cleny.length)) {
     return ["Zrcadlo", ...(disk.cleny || [])].filter(Boolean).join(" · ");
   }
-  return [disk.model, disk.velikost].filter(Boolean).join(" · ") || "Datový disk";
+  return [disk.model, disk.velikost, disk.pripojeni].filter(Boolean).join(" · ") || "Datový disk";
 }
 
 function kartaZrcadla(disk) {
@@ -609,7 +614,7 @@ async function otevriPridatDisk() {
       await api("/api/disky/svazek", { potvrzeni: potvrzeni.value, disk: disk.jmeno });
     }));
     deti.push(
-      el("p", { class: "poznamka", text: [disk.model, disk.velikost].filter(Boolean).join(" · ") }),
+      el("p", { class: "poznamka", text: [disk.model, disk.velikost, disk.pripojeni].filter(Boolean).join(" · ") }),
       radekFormulare([potvrzeni, ulozit])
     );
   });
@@ -737,7 +742,7 @@ function otevriKonfiguraciRaidu() {
     const vyber = el("div");
     const doplnek = el("p", { class: "poznamka", text: "" });
     (data.disky || []).forEach((disk) => {
-      const text = [disk.model, disk.velikost, disk.sdileni ? "má sdílení" : ""].filter(Boolean).join(" · ");
+      const text = [disk.model, disk.velikost, disk.pripojeni, disk.sdileni ? "má sdílení" : ""].filter(Boolean).join(" · ");
       if (!data.lze) {
         deti.push(el("p", { class: "poznamka", text }));
         return;
@@ -784,11 +789,11 @@ function otevriKonfiguraciRaidu() {
 }
 
 async function otevriBetaRaid() {
-  otevriEdit("BETA RAID USB", el("p", { class: "poznamka", text: "Načítám…" }));
+  otevriEdit("BETA RAID", el("p", { class: "poznamka", text: "Načítám…" }));
   pripravUlozeni(null);
   try {
     const data = await api("/api/disky/raid");
-    if (edit.classList.contains("skryte") || edit.dataset.nazev !== "BETA RAID USB") return;
+    if (edit.classList.contains("skryte") || edit.dataset.nazev !== "BETA RAID") return;
     const beru = el("button", { type: "button", className: "male", textContent: data.beru });
     beru.addEventListener("click", () => otevriKonfiguraciRaidu());
     editTelo.replaceChildren(el("div", {}, [
@@ -824,7 +829,7 @@ async function nactiDisky() {
     seznam.append(el("div", { class: "blok" }, deti));
   });
   const pridat = el("button", { type: "button", className: "male", textContent: "Přidat disk" });
-  const raid = el("button", { type: "button", className: "male", textContent: "BETA RAID USB" });
+  const raid = el("button", { type: "button", className: "male", textContent: "BETA RAID" });
   pridat.addEventListener("click", () => otevriPridatDisk());
   raid.addEventListener("click", () => otevriBetaRaid());
   oknoTelo.replaceChildren(
@@ -1298,7 +1303,8 @@ async function nactiSystem() {
     pole("Čas", data.cas),
     pole("Běží", data.beh),
     pole("Teplota", data.teplota),
-    pole("Paměť", data.pamet)
+    pole("Paměť", data.pamet),
+    pole("Větrák", data.vetrak || "Na tomto zařízení není dostupné.")
   );
 }
 
@@ -1499,6 +1505,11 @@ async function nactiPrehled() {
   }
 }
 
+function ukazZnacku(znacka) {
+  const uzel = document.querySelector("#znacka");
+  if (uzel && znacka) uzel.textContent = znacka;
+}
+
 function ukazPlochu(ucet, polozky, spravce, verze, vystaveno) {
   vstup.classList.add("skryte");
   plocha.classList.remove("skryte");
@@ -1553,6 +1564,7 @@ async function nacti() {
     odeslat.disabled = false;
     return;
   }
+  ukazZnacku(stav.znacka);
   if (!stav.prihlasen) {
     ukazVstup(stav.prvni);
     odeslat.disabled = false;
@@ -1720,8 +1732,8 @@ function otevriNapajeni(restart) {
       editTelo.replaceChildren(el("p", {
         class: "poznamka",
         text: restart
-          ? "PI4 se restartuje. Za chvíli se sem vrať."
-          : "PI4 se vypíná. Naběhne, až ho znovu zapneš."
+          ? "Zařízení se restartuje. Za chvíli se sem vrať."
+          : "Zařízení se vypíná. Naběhne, až ho znovu zapneš."
       }));
     } catch (chyba) {
       potvrdit.disabled = false;
@@ -1732,8 +1744,8 @@ function otevriNapajeni(restart) {
     el("p", {
       class: "poznamka",
       text: restart
-        ? "PI4 se na chvíli odpojí a pak zase naběhne. Nic se nemaže."
-        : "PI4 se vypne a zůstane stát, dokud ho nezapneš. Nic se nemaže."
+        ? "Zařízení se na chvíli odpojí a pak zase naběhne. Nic se nemaže."
+        : "Zařízení se vypne a zůstane stát, dokud ho nezapneš. Nic se nemaže."
     }),
     potvrdit
   ]));

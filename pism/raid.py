@@ -14,17 +14,24 @@ MDADM = Path("/etc/mdadm/mdadm.conf")
 
 
 def varovani():
+    disky, _ = _rozdeleni()
+    ma_usb = any(disk.get("tran") == "usb" for disk in disky)
+    problemy = []
+    if ma_usb:
+        problemy.extend([
+            "Přes USB oba rychlé porty jedou po jedné společné cestě. Dva disky nepojedou každý plnou rychlostí.",
+            "Z portu nemusí jít utáhnout dva běžící disky. Když dojde proud, disk na chvíli zmizí a pole se rozpadne.",
+            "Kabel, konektor nebo krabička, která odpadne, vyřadí celý disk. U zrcadla zůstane jedna kopie a pole je oslabené.",
+        ])
+    problemy.extend([
+        "Skládání pole po výpadku trvá dlouho. Když během něj odpadne další disk, data jsou pryč.",
+        "RAID není záloha. Smazaný soubor nebo chybný zápis je na discích v poli.",
+        "Tohle je beta. Na pole nepatří jediná kopie dat.",
+    ])
     return {
-        "uvod": "Toto je software RAID. Disky nespojuje samostatný řadič, spojuje je PI4.",
-        "upozorneni": "Přes USB to nese tyhle problémy:",
-        "problemy": [
-            "Oba rychlé porty jedou po jedné společné cestě. Dva disky nepojedou každý plnou rychlostí.",
-            "PI4 z portu neutáhne dva běžící disky. Když dojde proud, disk na chvíli zmizí a pole se rozpadne.",
-            "Kabel, konektor nebo krabička, která odpadne, vyřadí celý disk. U zrcadla zůstane jedna kopie a pole je oslabené. Kde kopie není, spadnou všechna data.",
-            "Skládání pole po výpadku trvá dlouho. Když během něj odpadne další disk, data jsou pryč.",
-            "RAID není záloha. Smazaný soubor nebo chybný zápis je na discích v poli.",
-            "Tohle je beta. Na pole nepatří jediná kopie dat.",
-        ],
+        "uvod": "Toto je software RAID. Disky nespojuje samostatný řadič, spojuje je tento stroj.",
+        "upozorneni": "Přes USB to nese tyhle problémy:" if ma_usb else "Než se zrcadlo založí:",
+        "problemy": problemy,
         "beru": "Přečetl jsem a beru na vědomí vše v textu zmíněné",
         "konfigurace_nadpis": "Konfigurace soft RAID",
         "konfigurace": "Vyberou se dva disky se stejnou kapacitou. Pole se založí až po potvrzení.",
@@ -77,9 +84,7 @@ def _rozdeleni():
         if disk.get("type") != "disk":
             continue
         jmeno = str(disk.get("name") or "")
-        if not re.fullmatch(r"sd[a-z]+", jmeno):
-            continue
-        if disk.get("tran") != "usb" or stroj._je_system(disk):
+        if not stroj._vhodny_kandidat(disk):
             continue
         if _v_poli(disk):
             v_poli += 1
@@ -94,6 +99,8 @@ def _rozdeleni():
             "jmeno": jmeno,
             "model": (disk.get("model") or "").replace("_", " ").strip() or "Neznámý disk",
             "velikost": stroj._lidske(bajty),
+            "pripojeni": stroj._popis_pripojeni(disk.get("tran")),
+            "tran": str(disk.get("tran") or "").lower(),
             "bajty": bajty,
             "sdileni": stroj.disk_ma_sdileni(disk),
             "klic": "",
@@ -115,7 +122,7 @@ def _vety(disky):
             return ["Pro zrcadlo jsou potřeba dva disky se stejnou kapacitou. Připoj ještě jeden se stejnou kapacitou."]
         return ["Připojené disky nemají stejnou kapacitu. Pro zrcadlo jsou potřeba dva se stejnou."]
     pary = [disk for disk in disky if disk["klic"]]
-    vety = ["Ukazují se jen disky, které mají pár. Vyber dva se stejnou kapacitou. Výrobce může být jiný. Systémová karta se nepoužije."]
+    vety = ["Ukazují se jen disky, které mají pár. Vyber dva se stejnou kapacitou. Výrobce může být jiný. Systémový disk se nepoužije."]
     if any(disk["sdileni"] for disk in pary):
         vety.append("Když do výběru dáš disk se sdílením, složky a práva uživatelů k nim se nejdřív zruší. Účty zůstanou. Teprve potom se oba disky smažou a založí se zrcadlo.")
         vety.append("Když disk se sdílením nevybereš, sdílení zůstane a zrcadlo bude vedle něj.")
@@ -142,7 +149,7 @@ def konfigurace():
         }
     pary = [disk for disk in disky if disk["klic"]]
     verejne = [
-        {klic: disk[klic] for klic in ("jmeno", "model", "velikost", "klic", "sdileni")}
+        {klic: disk[klic] for klic in ("jmeno", "model", "velikost", "klic", "sdileni", "pripojeni")}
         for disk in pary
     ]
     klice = {stroj._klic_podle_jmena(disk["jmeno"]) for disk in pary if disk["sdileni"]}
@@ -226,15 +233,8 @@ def _blok(jmeno):
 
 
 def _over_k_smazani(disk):
-    jmeno = str(disk.get("name") or "")
-    if not re.fullmatch(r"sd[a-z]+", jmeno):
-        raise stroj.StrojChyba("Disk nejde poznat.")
-    if disk.get("tran") != "usb" or stroj._je_system(disk) or jmeno.startswith("mmc"):
-        raise stroj.StrojChyba("Systémová karta se nemaže.")
-    cesta = stroj._cesta_disku(jmeno)
-    if not re.fullmatch(r"/dev/sd[a-z]+", str(cesta)):
-        raise stroj.StrojChyba("Disk nejde poznat.")
-    return cesta
+    disk = stroj._znovu_ten_disk(disk)
+    return stroj._cesta_disku(disk["name"])
 
 
 def _priprav_smazani(jmena):
@@ -293,6 +293,15 @@ def _fstab_zrcadlo(uuid):
     stroj.FSTAB.write_text("\n".join(radky).rstrip() + "\n", encoding="utf-8")
 
 
+def _rodic_disku(jmeno):
+    text = str(jmeno or "")
+    for vzor in (r"(nvme[0-9]+n[0-9]+)p[0-9]+", r"(mmcblk[0-9]+)p[0-9]+", r"(sd[a-z]+)\d*"):
+        shoda = re.fullmatch(vzor, text)
+        if shoda:
+            return shoda.group(1)
+    return text
+
+
 def prehled_zrcadla():
     uklid_odebrane()
     try:
@@ -314,13 +323,9 @@ def prehled_zrcadla():
     shoda = re.search(r"\[(\d+)/(\d+)\]", detail)
     celkem = int(shoda.group(1)) if shoda else max(len(jmena), 1)
     jedou = int(shoda.group(2)) if shoda else len(jmena) - len(chybne)
-    def rodic(jmeno):
-        shoda = re.fullmatch(r"(sd[a-z]+)\d*", jmeno)
-        return shoda.group(1) if shoda else jmeno
-
     modely = {}
     velikost = ""
-    rodice = {rodic(jmeno) for jmeno in jmena}
+    rodice = {_rodic_disku(jmeno) for jmeno in jmena}
     for disk in stroj._blokova():
         if disk.get("type") != "disk":
             continue
@@ -336,7 +341,7 @@ def prehled_zrcadla():
     cleny_disky = []
     videne = set()
     for jmeno in jmena:
-        rodic_jmeno = rodic(jmeno)
+        rodic_jmeno = _rodic_disku(jmeno)
         if rodic_jmeno in videne or rodic_jmeno not in modely:
             continue
         videne.add(rodic_jmeno)
@@ -464,9 +469,9 @@ def zaloz(jmena):
     try:
         stroj._balicek("mdadm")
     except stroj.StrojChyba as chyba:
-        raise stroj.StrojChyba("Zrcadlo na PI4 nejde založit.") from chyba
+        raise stroj.StrojChyba("Zrcadlo nejde založit.") from chyba
     if not shutil.which("mdadm"):
-        raise stroj.StrojChyba("Zrcadlo na PI4 nejde založit.")
+        raise stroj.StrojChyba("Zrcadlo nejde založit.")
     vrat = _zrus_sdileni([disk["jmeno"] for disk in vybrane]) if any(disk["sdileni"] for disk in vybrane) else None
     if _pole_bezi():
         if vrat:
@@ -478,7 +483,7 @@ def zaloz(jmena):
         if vrat:
             vrat()
         text = str(chyba)
-        if any(veta in text for veta in ("Systémová", "nejde poznat", "není připojený", "nečekaném", "nepodařilo odpojit")):
+        if any(veta in text for veta in ("Systémov", "změnil", "nejde poznat", "není připojený", "nečekaném", "nepodařilo odpojit")):
             raise
         raise stroj.StrojChyba("Disk se nepodařilo smazat. Zrcadlo se nezaložilo.") from chyba
     try:
@@ -538,7 +543,7 @@ def _clenove(zarizeni):
         return []
     nalezene = []
     for radek in text.splitlines():
-        for shoda in re.findall(r"(/dev/sd[a-z]+\d*)", radek):
+        for shoda in re.findall(r"(/dev/(?:sd[a-z]+\d*|nvme[0-9]+n[0-9]+(?:p[0-9]+)?|mmcblk[0-9]+(?:p[0-9]+)?))", radek):
             if shoda not in nalezene:
                 nalezene.append(shoda)
     return nalezene

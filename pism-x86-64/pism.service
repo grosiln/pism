@@ -1,0 +1,15 @@
+[Unit]
+Description=PISM
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/pism
+ExecStart=/usr/bin/python3 /opt/pism/server.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

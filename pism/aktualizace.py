@@ -178,7 +178,12 @@ def _jednotky(zdroj):
     cil = Path("/etc/systemd/system")
     if not cil.is_dir():
         return
-    for jmeno in ("pism.service", "pism-vetrak.service", "pism-sit.service"):
+    jmena = ["pism.service", "pism-sit.service"]
+    if stroj.je_podporovany_vetrak() and (zdroj / "pism-vetrak.service").is_file():
+        jmena.append("pism-vetrak.service")
+    else:
+        subprocess.run(["systemctl", "disable", "--now", "pism-vetrak.service"], capture_output=True)
+    for jmeno in jmena:
         odkud = zdroj / jmeno
         if odkud.is_file():
             shutil.copy2(odkud, cil / jmeno)
@@ -210,6 +215,9 @@ def _hlidac():
         )
     radky += [
         "systemctl daemon-reload",
+        f'[ -f "{ZALOHA / "pism.service"}" ] && cp "{ZALOHA / "pism.service"}" /etc/systemd/system/pism.service',
+        f'[ -f "{ZALOHA / "pism-sit.service"}" ] && cp "{ZALOHA / "pism-sit.service"}" /etc/systemd/system/pism-sit.service',
+        "systemctl daemon-reload",
         "systemctl restart pism.service",
         "exit 0",
         "",
@@ -237,7 +245,7 @@ def proved():
             raise
         except Exception as chyba:
             raise stroj.StrojChyba("Aktualizace se nepovedla. Tahle verze zůstala.") from chyba
-        nalezene = list(koren_tmp.glob("pism-*/pism/server.py"))
+        nalezene = list(koren_tmp.glob(f"pism-*/{stroj.slozka_programu()}/server.py"))
         if len(nalezene) != 1:
             raise stroj.StrojChyba("Aktualizace se nepovedla. Tahle verze zůstala.")
         zdroj = nalezene[0].parent
@@ -251,6 +259,7 @@ def proved():
             _jednotky(KORENOVA)
         except Exception as chyba:
             _kopiruj(ZALOHA, KORENOVA)
+            _jednotky(ZALOHA)
             raise stroj.StrojChyba("Aktualizace se nepovedla. Tahle verze zůstala.") from chyba
     hlidac = _hlidac()
     stroj._beh(

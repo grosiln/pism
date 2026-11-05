@@ -1,0 +1,16 @@
+#!/bin/sh
+IFACE="$1"
+ACTION="$2"
+if [ "$IFACE" = "boot" ]; then
+  sleep 8
+  exec /usr/bin/python3 -c "import sys; sys.path.insert(0, '/home/pi/pism'); import stroj; stroj.srovnej_sit()"
+fi
+if [ "$IFACE" != "eth0" ]; then
+  exit 0
+fi
+case "$ACTION" in
+  up|down|connectivity-change) ;;
+  *) exit 0 ;;
+esac
+nohup /usr/bin/python3 -c "import sys; sys.path.insert(0, '/home/pi/pism'); import stroj; stroj.srovnej_sit()" >/dev/null 2>&1 &
+exit 0

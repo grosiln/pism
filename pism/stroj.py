@@ -17,7 +17,9 @@ MISTO = Path("/srv/pism")
 SLOZKY_DIR = MISTO / "slozky"
 DALSI_KOREN = Path("/srv/pism-dalsi")
 ZNACKA_DALSI = "PISMDISK"
-DATA = Path(__file__).resolve().parent / "data"
+VETEV = "arm"
+KORENOVA = Path(__file__).resolve().parent
+DATA = Path("/var/lib/pism") if KORENOVA == Path("/opt/pism") else KORENOVA / "data"
 SOUBOR_SLOZEK = DATA / "slozky.json"
 SOUBOR_MIMO = DATA / "mimo.json"
 SMB = Path("/etc/samba/pism.conf")
@@ -29,6 +31,9 @@ ZAKAZANE = {"pi", "root", "www-data", "nobody"}
 JMENO_UCTU = re.compile(r"^[a-z][a-z0-9]{1,20}$")
 JMENO_SLOZKY = re.compile(r"^[a-z][a-z0-9]{1,20}$")
 JMENO_ZARIZENI = re.compile(r"^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$")
+JMENO_DISKU = re.compile(r"^(?:sd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$")
+JMENO_BLOKU = re.compile(r"^(?:sd[a-z]+\d*|nvme[0-9]+n[0-9]+(?:p[0-9]+)?|mmcblk[0-9]+(?:p[0-9]+)?)$")
+CIZI_VRSTVA = {"LVM2_member", "zfs_member", "zfs", "crypto_LUKS"}
 
 
 class StrojChyba(Exception):
@@ -51,9 +56,9 @@ def _beh(prikaz, vstup=None, cas=60, prostredi=None):
         )
     except subprocess.CalledProcessError as chyba:
         text = (chyba.stderr or chyba.stdout or "").strip()
-        raise StrojChyba(text or "Příkaz na PI4 se nepovedl.") from chyba
+        raise StrojChyba(text or "Příkaz se nepovedl.") from chyba
     except subprocess.TimeoutExpired as chyba:
-        raise StrojChyba("PI4 nestihla příkaz včas.") from chyba
+        raise StrojChyba("Stroj nestihl příkaz včas.") from chyba
 
 
 def _skupina():
@@ -72,8 +77,88 @@ def _lidske(bajty):
 
 
 def _blokova():
-    text = _beh(["lsblk", "-J", "-b", "-o", "NAME,SIZE,TYPE,TRAN,MODEL,MOUNTPOINT,FSTYPE,LABEL,UUID"]).stdout
-    return json.loads(text).get("blockdevices", [])
+    sloupce = (
+        "NAME,SIZE,TYPE,TRAN,MODEL,MOUNTPOINT,FSTYPE,LABEL,UUID,SERIAL,WWN",
+        "NAME,SIZE,TYPE,TRAN,MODEL,MOUNTPOINT,FSTYPE,LABEL,UUID,SERIAL",
+        "NAME,SIZE,TYPE,TRAN,MODEL,MOUNTPOINT,FSTYPE,LABEL,UUID",
+    )
+    posledni = None
+    for sloupec in sloupce:
+        try:
+            text = _beh(["lsblk", "-J", "-b", "-o", sloupec]).stdout
+        except StrojChyba as chyba:
+            posledni = chyba
+            continue
+        try:
+            return json.loads(text).get("blockdevices", [])
+        except json.JSONDecodeError as chyba:
+            posledni = chyba
+    if isinstance(posledni, StrojChyba):
+        raise posledni
+    raise StrojChyba("Disky se nepodařilo přečíst.")
+
+
+def _je_jmeno_disku(jmeno):
+    return bool(JMENO_DISKU.fullmatch(str(jmeno or "")))
+
+
+def _popis_pripojeni(tran):
+    text = str(tran or "").strip().lower()
+    nazvy = {"usb": "USB", "sata": "SATA", "ata": "SATA", "nvme": "NVMe", "sas": "SAS", "mmc": "eMMC", "ide": "IDE"}
+    if not text:
+        return "neznámé"
+    return nazvy.get(text, text)
+
+
+def _nacti_swapy():
+    nalezene = set()
+    try:
+        radky = Path("/proc/swaps").read_text(encoding="utf-8").splitlines()[1:]
+    except OSError:
+        return nalezene
+    for radek in radky:
+        casti = radek.split()
+        if casti:
+            nalezene.add(casti[0])
+    return nalezene
+
+
+def _model_stroje():
+    try:
+        text = Path("/proc/device-tree/model").read_bytes().split(b"\0", 1)[0].decode().strip()
+        if text:
+            return text
+    except OSError:
+        pass
+    for cesta in ("/sys/class/dmi/id/product_name", "/sys/class/dmi/id/sys_vendor"):
+        try:
+            text = Path(cesta).read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if text and text.lower() not in {"to be filled by o.e.m.", "default string", "system manufacturer"}:
+            return text
+    return ""
+
+
+def znacka_stroje():
+    if VETEV == "pc":
+        return "PC"
+    model = _model_stroje()
+    if "Raspberry Pi 5" in model:
+        return "PI5"
+    if "Raspberry Pi 4" in model:
+        return "PI4"
+    if "Raspberry Pi" in model:
+        return "PI"
+    return "ARM"
+
+
+def je_podporovany_vetrak():
+    return VETEV == "arm" and "Raspberry Pi 4" in _model_stroje()
+
+
+def slozka_programu():
+    return "pism" if VETEV == "arm" else "pism-x86-64"
 
 
 def _potomci(zarizeni):
@@ -88,8 +173,76 @@ def _potomci(zarizeni):
     return nalezene
 
 
-def _je_system(zarizeni):
-    return any((dite.get("mountpoint") or "") == "/" for dite in _potomci(zarizeni))
+def _je_system(zarizeni, swapy=None):
+    if swapy is None:
+        swapy = _nacti_swapy()
+    for dite in _potomci(zarizeni):
+        misto = str(dite.get("mountpoint") or "")
+        if misto in {"/", "/boot", "/boot/efi", "/boot/firmware"} or misto.startswith("/boot/"):
+            return True
+        if str(dite.get("fstype") or "") == "swap":
+            return True
+        jmeno = str(dite.get("name") or "")
+        if jmeno and f"/dev/{jmeno}" in swapy:
+            return True
+    return False
+
+
+def _ma_chraneny_pripoj(zarizeni):
+    for dite in _potomci(zarizeni):
+        misto = str(dite.get("mountpoint") or "")
+        if not misto:
+            continue
+        if misto in {"/", "/boot", "/boot/efi", "/boot/firmware", "/home", "/usr", "/var", "/etc"}:
+            return True
+        if misto.startswith(("/boot/", "/home/", "/usr/", "/var/", "/etc/")):
+            return True
+        if misto == "/srv" or (misto.startswith("/srv/") and not misto.startswith("/srv/pism")):
+            return True
+    return False
+
+
+def _ma_cizi_vrstvu(zarizeni):
+    for dite in _potomci(zarizeni):
+        if str(dite.get("fstype") or "") in CIZI_VRSTVA:
+            return True
+        typ = str(dite.get("type") or "")
+        if typ.startswith(("lvm", "crypt", "dm")):
+            return True
+    return False
+
+
+def _vhodny_kandidat(disk, swapy=None):
+    if disk.get("type") != "disk" or not _je_jmeno_disku(disk.get("name")):
+        return False
+    if _je_system(disk, swapy) or _ma_chraneny_pripoj(disk) or _ma_cizi_vrstvu(disk):
+        return False
+    try:
+        return int(disk.get("size") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _totoznost(disk):
+    return (
+        str(disk.get("name") or ""),
+        str(disk.get("serial") or "").strip(),
+        str(disk.get("wwn") or "").strip(),
+        str(disk.get("size") or ""),
+    )
+
+
+def _znovu_ten_disk(disk):
+    jmeno = str(disk.get("name") or "")
+    if not _je_jmeno_disku(jmeno):
+        raise StrojChyba("Disk nejde poznat.")
+    if _je_system(disk) or _ma_cizi_vrstvu(disk):
+        raise StrojChyba("Systémový disk se nemaže.")
+    znacka = _totoznost(disk)
+    novy = _blok_podle_jmena(jmeno)
+    if _totoznost(novy) != znacka or _je_system(novy) or _ma_cizi_vrstvu(novy):
+        raise StrojChyba("Disk se mezitím změnil. Nic se nesmazalo.")
+    return novy
 
 
 def _ma_svazek_pism(disk):
@@ -102,17 +255,17 @@ def _ma_svazek_pism(disk):
 def _datovy():
     se_svazkem = [
         polozka for polozka in _blokova()
-        if polozka.get("type") == "disk" and polozka.get("tran") == "usb" and not _je_system(polozka) and _ma_svazek_pism(polozka)
+        if polozka.get("type") == "disk" and not _je_system(polozka) and _ma_svazek_pism(polozka)
     ]
     if len(se_svazkem) == 1:
         return se_svazkem[0]
     if len(se_svazkem) > 1:
-        raise StrojChyba("Je připojených víc disků na USB. Nech zapojený jen ten na zkoušky.")
-    raise StrojChyba("Na USB není datový disk.")
+        raise StrojChyba("Je připojených víc disků se svazkem PISM. Nech zapojený jen jeden.")
+    raise StrojChyba("Není datový disk.")
 
 
 def _cesta_disku(jmeno):
-    if not re.fullmatch(r"[a-z0-9]+", jmeno or ""):
+    if not JMENO_BLOKU.fullmatch(str(jmeno or "")):
         raise StrojChyba("Disk nejde poznat.")
     return Path("/dev") / jmeno
 
@@ -132,7 +285,7 @@ def _odpoj(misto):
         return
     chranene = {"/", "/boot", "/boot/firmware", "/home", "/usr", "/var", "/etc", "/srv"}
     if misto in chranene or misto.startswith("/boot/"):
-        raise StrojChyba("Systémová karta se nemaže.")
+        raise StrojChyba("Systémový disk se nemaže.")
     if str(misto).startswith(str(DALSI_KOREN) + "/") or misto == "/srv/pism-zrcadlo":
         _beh(["umount", misto])
         return
@@ -203,9 +356,10 @@ def disky():
         oddily = [dite for dite in _potomci(polozka) if dite.get("type") == "part"]
         svazek = any((dite.get("label") or "") == "PISM" and (dite.get("mountpoint") or "") == str(MISTO) for dite in oddily)
         popis = {
-            "nazev": "Systémová SD karta" if systemovy else "Datový disk",
+            "nazev": "Systémový disk" if systemovy else "Datový disk",
             "model": (polozka.get("model") or "").strip() or "Neznámý disk",
             "velikost": _lidske(int(polozka.get("size") or 0)),
+            "pripojeni": _popis_pripojeni(polozka.get("tran")),
             "systemovy": systemovy,
             "svazek": svazek,
             "volno": _volno("/") if systemovy else (_volno(MISTO) if svazek else ""),
@@ -222,6 +376,7 @@ def disky():
             "nazev": "Datový disk",
             "model": dalsi["model"],
             "velikost": dalsi["velikost"],
+            "pripojeni": dalsi.get("pripojeni") or "",
             "systemovy": False,
             "svazek": True,
             "volno": dalsi["volno"],
@@ -254,11 +409,9 @@ def _je_v_poli(disk):
 def _kandidati():
     vysledek = []
     for disk in _blokova():
-        if disk.get("type") != "disk" or disk.get("tran") != "usb" or _je_system(disk):
+        if not _vhodny_kandidat(disk):
             continue
         jmeno = str(disk.get("name") or "")
-        if not jmeno or jmeno.startswith(("mmc", "loop", "zram", "md")):
-            continue
         if _ma_svazek_pism(disk) or _je_dalsi(disk) or _je_v_poli(disk) or _ma_znacku(disk, "PISM"):
             continue
         try:
@@ -271,6 +424,7 @@ def _kandidati():
             "jmeno": jmeno,
             "model": (disk.get("model") or "").replace("_", " ").strip() or "Neznámý disk",
             "velikost": _lidske(bajty),
+            "pripojeni": _popis_pripojeni(disk.get("tran")),
         })
     return vysledek
 
@@ -316,6 +470,7 @@ def _seznam_datovych():
                     "misto": str(MISTO),
                     "jmeno": jmeno,
                     "uuid": uuid,
+                    "pripojeni": _popis_pripojeni(disk.get("tran")),
                 })
             elif label == ZNACKA_DALSI and uuid and montaz.startswith(str(DALSI_KOREN) + "/"):
                 vysledek.append({
@@ -327,6 +482,7 @@ def _seznam_datovych():
                     "misto": montaz,
                     "jmeno": jmeno,
                     "uuid": uuid,
+                    "pripojeni": _popis_pripojeni(disk.get("tran")),
                 })
     return vysledek
 
@@ -339,6 +495,7 @@ def mista_pro_slozky():
                 "klic": disk["klic"],
                 "model": disk["model"],
                 "velikost": disk["velikost"],
+                "pripojeni": disk.get("pripojeni") or "",
                 "misto": disk["misto"],
                 "cleny": [],
             })
@@ -357,7 +514,7 @@ def mista_pro_slozky():
 
 def _blok_podle_jmena(jmeno):
     jmeno = str(jmeno or "")
-    if not re.fullmatch(r"sd[a-z]+", jmeno):
+    if not _je_jmeno_disku(jmeno):
         raise StrojChyba("Disk nejde poznat.")
     for disk in _blokova():
         if disk.get("type") == "disk" and disk.get("name") == jmeno:
@@ -393,6 +550,7 @@ def _smart_json(zarizeni):
     for prikaz in (
         ["smartctl", "-j", "-a", zarizeni],
         ["smartctl", "-j", "-d", "sat", "-a", zarizeni],
+        ["smartctl", "-j", "-d", "nvme", "-a", zarizeni],
     ):
         try:
             vysledek = subprocess.run(prikaz, capture_output=True, text=True, timeout=30)
@@ -412,7 +570,7 @@ def _disk_pro_smart(klic):
     klic = str(klic or "")
     if klic.startswith("raid:"):
         jmeno = klic.split(":", 1)[1]
-        if not re.fullmatch(r"sd[a-z]+", jmeno):
+        if not _je_jmeno_disku(jmeno):
             return {"lze": False, "veta": "Není disk k dispozici."}
         import raid
         zrcadlo = raid.prehled_zrcadla() or {}
@@ -449,8 +607,8 @@ def smart(klic=""):
     if disk.get("lze") is False:
         return disk
     jmeno = str(disk.get("name", ""))
-    if _je_system(disk) or jmeno.startswith("mmc"):
-        return {"lze": False, "veta": "Systémová karta SMART nemá."}
+    if _je_system(disk):
+        return {"lze": False, "veta": "Systémový disk SMART nemá."}
     data = _smart_json(str(_cesta_disku(jmeno)))
     if not data:
         return {"lze": False, "veta": "Z tohoto disku SMART nejde přečíst."}
@@ -526,8 +684,8 @@ def _fstab(uuid):
 
 def _priprav_prazdny(disk, label):
     jmeno = str(disk.get("name") or "")
-    if _je_system(disk) or jmeno.startswith("mmc"):
-        raise StrojChyba("Systémová karta se nemaže.")
+    disk = _znovu_ten_disk(disk)
+    jmeno = str(disk.get("name") or "")
     _odpoj_ftp()
     for dite in _potomci(disk):
         if dite is disk:
@@ -691,6 +849,8 @@ def _uvolni_slozky(klice, mista, hlaseni):
 
 
 def _vycisti_disk(blok, jmeno):
+    blok = _znovu_ten_disk(blok)
+    jmeno = str(blok.get("name") or jmeno)
     for dite in _potomci(blok):
         if dite.get("type") != "part":
             continue
@@ -705,9 +865,7 @@ def _datovy_klic(klic):
     cil = next((disk for disk in _seznam_datovych() if disk["klic"] == klic), None)
     if not cil:
         raise StrojChyba("Disk není.")
-    blok = _blok_podle_jmena(cil["jmeno"])
-    if _je_system(blok) or str(blok.get("name") or "").startswith("mmc"):
-        raise StrojChyba("Systémová karta se nemaže.")
+    blok = _znovu_ten_disk(_blok_podle_jmena(cil["jmeno"]))
     return cil, blok
 
 
@@ -875,7 +1033,7 @@ def sluzby():
             "port": 22,
             "zapnuto": ssh_zap,
             "stav": _stav_sluzby(ssh_zap, _jednotka_bezi("ssh")),
-            "poznamka": "Když SSH vypneš, z jiného počítače se do PI4 nepřihlásíš, dokud ho zase nezapneš přímo u PI4.",
+            "poznamka": "Když SSH vypneš, z jiného počítače se do zařízení nepřihlásíš, dokud ho zase nezapneš přímo u zařízení.",
         },
         {
             "id": "ftp",
@@ -924,29 +1082,39 @@ def _jadro():
 
 
 def system():
-    with open("/proc/uptime", encoding="ascii") as handle:
-        sekundy = int(float(handle.read().split()[0]))
+    try:
+        with open("/proc/uptime", encoding="ascii") as handle:
+            sekundy = int(float(handle.read().split()[0]))
+    except (OSError, ValueError):
+        sekundy = 0
     hodiny, zbytek = divmod(sekundy, 3600)
     minuty = zbytek // 60
-    with open("/proc/meminfo", encoding="ascii") as handle:
+    info = {}
+    try:
+        with open("/proc/meminfo", encoding="ascii") as handle:
+            for radek in handle:
+                klic, hodnota = radek.split(":", 1)
+                info[klic] = int(hodnota.strip().split()[0]) * 1024
+    except (OSError, ValueError):
         info = {}
-        for radek in handle:
-            klic, hodnota = radek.split(":", 1)
-            info[klic] = int(hodnota.strip().split()[0]) * 1024
-    model = Path("/proc/device-tree/model").read_bytes().split(b"\0", 1)[0].decode()
-    teplota = int(Path("/sys/class/thermal/thermal_zone0/temp").read_text(encoding="ascii")) / 1000
-    cas = _beh(["date", "+%d.%m.%Y %H:%M"]).stdout.strip()
+    model = _model_stroje() or "neznámé zařízení"
+    teplota = _teplota_cpu() or "nejde zjistit"
+    try:
+        cas = _beh(["date", "+%d.%m.%Y %H:%M"]).stdout.strip()
+    except StrojChyba:
+        cas = ""
     return {
-        "jmeno": Path("/etc/hostname").read_text(encoding="utf-8").strip(),
+        "jmeno": Path("/etc/hostname").read_text(encoding="utf-8").strip() if Path("/etc/hostname").is_file() else "",
         "verze": VERZE,
         "model": model,
         "cas": cas,
         "beh": f"{hodiny} h {minuty} min",
-        "teplota": f"{teplota:.1f} °C",
+        "teplota": teplota,
         "pamet": _obsazeni_pomer(info.get("MemTotal", 0) - info.get("MemAvailable", 0), info.get("MemTotal", 0)),
         "system": _text_release("PRETTY_NAME"),
         "jadro": _jadro(),
         "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        "vetrak": "Na tomto Raspberry Pi 4 se točí podle teploty." if je_podporovany_vetrak() else "Na tomto zařízení není dostupné.",
     }
 
 
@@ -968,23 +1136,29 @@ def _text_rychlosti(bajty):
     return f"{bajty / (1024 * 1024):.1f} MB/s"
 
 
+def _rozhrani_je_zive(zarizeni, soubor, hodnota):
+    if not zarizeni or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,32}", zarizeni):
+        return False
+    try:
+        return Path(f"/sys/class/net/{zarizeni}/{soubor}").read_text(encoding="ascii").strip() == hodnota
+    except OSError:
+        return False
+
+
 def _zarizeni_prenosa():
-    try:
-        if Path("/sys/class/net/eth0/carrier").read_text(encoding="ascii").strip() == "1":
-            return "eth0"
-    except OSError:
-        pass
-    try:
-        if Path("/sys/class/net/wlan0/operstate").read_text(encoding="ascii").strip() == "up":
-            return "wlan0"
-    except OSError:
-        pass
+    import sit as sit_modul
+    lan = sit_modul.lan_rozhrani()
+    wifi = sit_modul.wifi_rozhrani()
+    if _rozhrani_je_zive(lan, "carrier", "1"):
+        return lan
+    if _rozhrani_je_zive(wifi, "operstate", "up"):
+        return wifi
     return ""
 
 
 def rychlost_site():
     zarizeni = _zarizeni_prenosa()
-    if zarizeni not in {"eth0", "wlan0"}:
+    if not _rozhrani_je_zive(zarizeni, "carrier", "1") and not _rozhrani_je_zive(zarizeni, "operstate", "up"):
         return {"cteni": "0", "zapis": "0", "teplota": _teplota_cpu()}
     try:
         prijem = int(Path(f"/sys/class/net/{zarizeni}/statistics/rx_bytes").read_text(encoding="ascii"))
