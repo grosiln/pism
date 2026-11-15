@@ -16,7 +16,7 @@ V prohlížeči se otevře adresa IP kde zařízení leží. Je to běžné http
 
 První otevření si řekne o heslo správce. Účet bude admin.
 
-Na nové ARM co X86  se nejdřív připraví Debian LITE a zapojí se internet. V příkazovém řádku se napíše jen tahle věta. Žádný soubor se tam nekopíruje.
+Na desku ARM nebo pc X86-64  se nejdřív připraví Debian LITE a zapojí se internet. V příkazovém řádku se napíše jen tahle věta. Žádný soubor se tam nekopíruje.
 
 ```
 curl -fsSL https://raw.githubusercontent.com/grosiln/pism/main/instaluj.sh | sudo bash
@@ -68,8 +68,7 @@ Access the system by entering the device's IP address into your web browser. It 
 
 When you first access the interface, you will be prompted to set an administrator password. The default username is "admin."
 
-For both ARM and x86 systems, first prepare a Debian LITE installation and ensure an active internet connection. Then, simply enter the provided command into the command line. No files need to be manually copied.
-
+First, set up Debian LITE on an ARM board or an x86-64 PC and connect it to the internet. Then, simply enter this single sentence into the command line. No files need to be copied over.
 ```
 curl -fsSL https://raw.githubusercontent.com/grosiln/pism/main/instaluj.sh | sudo bash
 ```
