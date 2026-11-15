@@ -2,15 +2,21 @@
 
 **Aktuální verze 1.2, vystavená 31. 10. 2026.**
 
-PISM je úložiště na Raspberry Pi 4. Sdílené složky, účty, disky a zrcadlo se ovládají v prohlížeči.
+PISM je nadstavba pro debian linux LITE jak verzi ARM tak verzi 64bit x86.
+
+Chtěl jsem něco co bude snadno nastavitelné jako NAS
+
+Sdílené složky, účty, disky a zrcadlo se ovládají v prohlížeči.
 
 PISM je pod licencí GrosiStudia. Další vývoj můžeš podpořit příspěvkem na PayPal grossmann@7ruzi.cz. Hodí se třeba 200 Kč, potěší i méně. Nic se tím neodemkne.
 
 Po instalaci je úplně prázdné. Nejsou v něm účty, sdílené složky ani připojené disky.
 
-V prohlížeči se otevře adresa toho PI4. Je to běžné http, port 80. Za adresu se číslo portu nepíše, třeba http://192.168.1.50. Instalační věta tu adresu na konci vypíše. První otevření si řekne o heslo správce. Účet bude admin.
+V prohlížeči se otevře adresa IP kde zařízení leží. Je to běžné http, port 80. Za adresu se číslo portu nepíše, třeba http://192.168.1.50. Instalační věta tu adresu na konci vypíše.
 
-Na nové PI4 se nejdřív připraví běžný Raspberry Pi OS a zapojí se internet. V příkazovém řádku se napíše jen tahle věta. Žádný soubor se tam nekopíruje.
+První otevření si řekne o heslo správce. Účet bude admin.
+
+Na nové ARM co X86  se nejdřív připraví Debian LITE a zapojí se internet. V příkazovém řádku se napíše jen tahle věta. Žádný soubor se tam nekopíruje.
 
 ```
 curl -fsSL https://raw.githubusercontent.com/grosiln/pism/main/instaluj.sh | sudo bash
@@ -48,15 +54,21 @@ Složka jde založit až ve chvíli, kdy je datový disk.
 
 **Current version 1.2, released 31 October 2026.**
 
-PISM is storage on a Raspberry Pi 4. Shared folders, accounts, disks and a mirror are controlled in the browser.
+PISM is an add-on for Debian Linux LITE, available for both ARM and 64-bit x86 architectures.
 
-PISM is under the GrosiStudio licence. Further work can be supported with a gift to PayPal grossmann@7ruzi.cz. Something like 200 Kč fits, and less is welcome too. Nothing is unlocked by it.
+I wanted something that could be easily configured as a NAS.
 
-After installation it is completely empty. There are no accounts, no shared folders and no connected disks.
+Shared folders, user accounts, drives, and mirroring (RAID 1) are managed via a web browser.
 
-The browser opens the address of that PI4. It is ordinary http, port 80. The port number is not written after the address, for example http://192.168.1.50. The install sentence prints that address at the end. The first open asks for the administrator password. The account will be admin.
+PISM is licensed under GrosiStudia. You can support further development via a PayPal contribution to grossmann@7ruzi.cz. A donation of around 200 CZK is appreciated, though any amount is welcome. Please note that this does not unlock any additional features.
 
-On a new PI4, ordinary Raspberry Pi OS is prepared first and the internet is connected. Only this sentence is typed in the command line. No file is copied there.
+After installation, the system is completely empty—it contains no user accounts, shared folders, or mounted drives.
+
+Access the system by entering the device's IP address into your web browser. It uses standard HTTP on port 80 (e.g., http://192.168.1.50). You do not need to specify the port number in the URL. The installation command will display the correct address upon completion.
+
+When you first access the interface, you will be prompted to set an administrator password. The default username is "admin."
+
+For both ARM and x86 systems, first prepare a Debian LITE installation and ensure an active internet connection. Then, simply enter the provided command into the command line. No files need to be manually copied.
 
 ```
 curl -fsSL https://raw.githubusercontent.com/grosiln/pism/main/instaluj.sh | sudo bash
